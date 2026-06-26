@@ -8,3 +8,5 @@ auth/user_profile.json
 ~$*.xlsx
 *.xlsx
 .claude/
+credentials.txt
+*.pem
