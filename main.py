@@ -81,8 +81,13 @@ async def index(request: Request):
 
     # Compute basket MTM P&L
     for b in baskets:
-        b["pnl"] = sum(p["pnl"] for p in basket_positions[b["id"]])
         b["positions"] = basket_positions[b["id"]]
+        b["pnl"] = sum(p["pnl"] for p in b["positions"])
+        basket_cost = sum(
+            abs(p["average_price"]) * abs(p["quantity"]) * p.get("multiplier", 1)
+            for p in b["positions"]
+        )
+        b["pnl_pct"] = (b["pnl"] / basket_cost * 100) if basket_cost else 0.0
         b["rm"] = get_rm(b["id"])
         b["rm_enabled"] = bool(
             b["rm"].get("pt_active") or b["rm"].get("lg_active") or b["rm"].get("ps_active")
