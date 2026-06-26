@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- KPI Bar -->
+<div class="kpi-bar">
+    <div class="kpi">
+        <span class="kpi-value">{{ active_baskets_count }}</span>
+        <span class="kpi-label">Active Baskets</span>
+    </div>
+    <div class="kpi {% if baskets_without_rm_count > 0 %}kpi-warn{% endif %}">
+        <span class="kpi-value">
+            {% if baskets_without_rm_count > 0 %}⚠ {% endif %}{{ baskets_without_rm_count }}
+        </span>
+        <span class="kpi-label">No RM Setup</span>
+    </div>
+    <div class="kpi {% if total_pnl < 0 %}kpi-loss{% else %}kpi-profit{% endif %}">
+        <span class="kpi-value">{{ "₹{:,.0f}".format(total_pnl) }}</span>
+        <span class="kpi-label">Total MTM P&L</span>
+    </div>
+    <div class="kpi">
+        <span class="kpi-value">{{ positions|length }}</span>
+        <span class="kpi-label">Open Positions</span>
+    </div>
+</div>
+
+<!-- Unallocated Section -->
+<section class="section">
+    <div class="section-header">
+        <h2>Unallocated <span class="badge">{{ unallocated|length }}</span></h2>
+        <button class="btn-primary btn-sm-action" id="alloc-selected-btn"
+                style="display:none"
+                onclick="openBulkAllocModal()">Allocate Selected</button>
+    </div>
+
+    {% if unallocated %}
+    <table class="positions-table">
+        <thead>
+            <tr>
+                <th class="col-check">
+                    <input type="checkbox" id="unalloc-check-all"
+                           onchange="toggleAllUnalloc(this)">
+                </th>
+                <th>Symbol</th>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Avg Price</th>
+                <th>LTP</th>
+                <th class="col-pnl">MTM P&L</th>
+            </tr>
+        </thead>
+        <tbody id="unalloc-tbody">
+        {% for p in unallocated %}
+        <tr>
+            <td class="col-check">
+                <input type="checkbox" class="unalloc-check"
+                       data-symbol="{{ p.tradingsymbol }}"
+                       data-exchange="{{ p.exchange }}"
+                       data-product="{{ p.product }}"
+                       data-token="{{ p.instrument_token or 0 }}"
+                       onchange="updateAllocBtn()">
+            </td>
+            <td class="symbol">{{ p.tradingsymbol }}<br><span class="exch">{{ p.exchange }}</span></td>
+            <td>{{ p.product }}</td>
+            <td class="{{ 'qty-buy' if p.quantity > 0 else 'qty-sell' }}">
+                {{ "%+d"|format(p.quantity) }}
+            </td>
+            <td>{{ "%.2f"|format(p.average_price) }}</td>
+            <td>{{ "%.2f"|format(p.last_price) }}</td>
+            <td class="col-pnl">
+                <span class="{{ 'profit' if p.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(p.pnl) }}</span>
+                <span class="pct-badge {{ 'pct-profit' if p.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(p.pnl_pct) }}%</span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">All positions are allocated to baskets.</p>
+    {% endif %}
+</section>
+
+<!-- Baskets -->
+{% for b in baskets %}
+<section class="section basket-card" id="basket-{{ b.id }}">
+    <div class="basket-header" onclick="toggleBasket({{ b.id }})">
+        <div class="basket-title">
+            <span class="basket-name">{{ b.name }}</span>
+            <span class="badge">{{ b.positions|length }} pos</span>
+        </div>
+        <div class="basket-meta">
+            <span class="rm-chip {{ 'rm-on' if b.rm.get('pt_active') else 'rm-off' }}">Profit Target</span>
+            <span class="rm-chip {{ 'rm-on' if b.rm.get('lg_active') else 'rm-off' }}">Loss Guard</span>
+            <span class="rm-chip {{ 'rm-on' if b.rm.get('ps_active') else 'rm-off' }}">Profit Shield</span>
+        </div>
+        <div class="basket-pnl">
+            <span class="{{ 'profit' if b.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(b.pnl) }}</span>
+            {% if b.positions %}
+            <span class="pct-badge {{ 'pct-profit' if b.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(b.pnl_pct) }}%</span>
+            {% endif %}
+        </div>
+        <button class="btn-sm btn-edit" onclick="event.stopPropagation(); openBasketEdit({{ b.id }})">Edit</button>
+        <span class="chevron" id="chevron-{{ b.id }}">›</span>
+    </div>
+
+    <!-- Expanded edit panel -->
+    <div class="basket-body" id="body-{{ b.id }}" style="display:none">
+        <div class="basket-expanded">
+
+            <!-- Left: Positions in this basket -->
+            <div class="basket-positions">
+                <div class="basket-pos-header">
+                    <h3>Positions</h3>
+                    <button class="btn-danger btn-sm-action" id="unalloc-btn-{{ b.id }}"
+                            style="display:none"
+                            onclick="unallocateSelected({{ b.id }})">Unallocate Selected</button>
+                </div>
+
+                {% if b.positions %}
+                <table class="positions-table">
+                    <thead>
+                        <tr>
+                            <th class="col-check">
+                                <input type="checkbox" id="basket-check-all-{{ b.id }}"
+                                       onchange="toggleAllBasket({{ b.id }}, this)">
+                            </th>
+                            <th>Symbol</th>
+                            <th>Qty</th>
+                            <th>Avg</th>
+                            <th>LTP</th>
+                            <th class="col-pnl">P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="basket-tbody-{{ b.id }}">
+                    {% for p in b.positions %}
+                    <tr>
+                        <td class="col-check">
+                            <input type="checkbox" class="basket-check-{{ b.id }}"
+                                   data-symbol="{{ p.tradingsymbol }}"
+                                   data-exchange="{{ p.exchange }}"
+                                   data-product="{{ p.product }}"
+                                   onchange="updateUnallocBtn({{ b.id }})">
+                        </td>
+                        <td class="symbol">{{ p.tradingsymbol }}<br><span class="exch">{{ p.exchange }}</span></td>
+                        <td class="{{ 'qty-buy' if p.quantity > 0 else 'qty-sell' }}">
+                            {{ "%+d"|format(p.quantity) }}
+                        </td>
+                        <td>{{ "%.2f"|format(p.average_price) }}</td>
+                        <td>{{ "%.2f"|format(p.last_price) }}</td>
+                        <td class="col-pnl">
+                            <span class="{{ 'profit' if p.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(p.pnl) }}</span>
+                            <span class="pct-badge {{ 'pct-profit' if p.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(p.pnl_pct) }}%</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">No positions in this basket.</p>
+                {% endif %}
+            </div>
+
+            <!-- Right: RM Tools -->
+            <div class="basket-rm">
+                <div class="rm-panel-header">
+                    <span class="rm-panel-title">Risk Management</span>
+                </div>
+
+                <!-- Profit Target -->
+                {% set pt = b.rm %}
+                <div class="rm-card" id="pt-card-{{ b.id }}">
+                    <div class="rm-card-header">
+                        <div class="rm-card-title">
+                            <span class="rm-card-icon pt-icon">↑</span>
+                            <span>Profit Target</span>
+                        </div>
+                    </div>
+                    <div class="rm-card-body" id="pt-body-{{ b.id }}">
+                        <form method="post" action="/baskets/{{ b.id }}/rm/profit-target"
+                              onsubmit="return validatePT({{ b.id }})">
+                            <input type="hidden" name="active" id="pt-active-{{ b.id }}"
+                                   value="{{ '1' if pt.get('pt_active') else '0' }}">
+                            <div class="rm-toggle-row">
+                                <label class="toggle">
+                                    <input type="checkbox" id="pt-toggle-{{ b.id }}"
+                                           {{ 'checked' if pt.get('pt_active') else '' }}
+                                           onchange="toggleRM('pt', {{ b.id }}, this.checked)">
+                                    <span class="toggle-track"></span>
+                                </label>
+                                <span class="rm-toggle-label">Enable Profit Target</span>
+                            </div>
+                            <div class="rm-fields" id="pt-fields-{{ b.id }}">
+                                <div class="rm-field">
+                                    <label>Target P&L (₹)</label>
+                                    <input type="number" name="inr" min="1" step="1"
+                                           id="pt-inr-{{ b.id }}"
+                                           value="{{ pt.get('pt_inr') or '' }}"
+                                           placeholder="e.g. 15000">
+                                </div>
+                                <div class="rm-field">
+                                    <label>Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
+                                    <input type="number" name="ticks" min="1" step="1"
+                                           id="pt-ticks-{{ b.id }}"
+                                           value="{{ pt.get('pt_ticks') or '' }}"
+                                           placeholder="e.g. 5 = holds for 25s">
+                                </div>
+                            </div>
+                            <div class="rm-card-footer">
+                                <button type="submit" class="rm-btn-save">Save</button>
+                                <button type="button" class="rm-btn-cancel"
+                                        onclick="cancelRM('pt', {{ b.id }},
+                                            {{ pt.get('pt_inr') or 'null' }},
+                                            {{ pt.get('pt_ticks') or 'null' }},
+                                            {{ 'true' if pt.get('pt_active') else 'false' }})">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Loss Guard -->
+                <div class="rm-card" id="lg-card-{{ b.id }}">
+                    <div class="rm-card-header">
+                        <div class="rm-card-title">
+                            <span class="rm-card-icon lg-icon">↓</span>
+                            <span>Loss Guard</span>
+                        </div>
+                    </div>
+                    <div class="rm-card-body" id="lg-body-{{ b.id }}">
+                        <form method="post" action="/baskets/{{ b.id }}/rm/loss-guard">
+                            <input type="hidden" name="active" id="lg-active-{{ b.id }}"
+                                   value="{{ '1' if pt.get('lg_active') else '0' }}">
+                            <div class="rm-toggle-row">
+                                <label class="toggle">
+                                    <input type="checkbox" id="lg-toggle-{{ b.id }}"
+                                           {{ 'checked' if pt.get('lg_active') else '' }}
+                                           onchange="toggleRM('lg', {{ b.id }}, this.checked)">
+                                    <span class="toggle-track"></span>
+                                </label>
+                                <span class="rm-toggle-label">Enable Loss Guard</span>
+                            </div>
+                            <div class="rm-fields" id="lg-fields-{{ b.id }}">
+                                <div class="rm-field">
+                                    <label>Max Loss (₹)</label>
+                                    <input type="number" name="inr" min="1" step="1"
+                                           id="lg-inr-{{ b.id }}"
+                                           value="{{ pt.get('lg_inr') or '' }}"
+                                           placeholder="e.g. 10000">
+                                </div>
+                                <div class="rm-field">
+                                    <label>Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
+                                    <input type="number" name="ticks" min="1" step="1"
+                                           id="lg-ticks-{{ b.id }}"
+                                           value="{{ pt.get('lg_ticks') or '' }}"
+                                           placeholder="e.g. 5 = holds for 25s">
+                                </div>
+                            </div>
+                            <div class="rm-card-footer">
+                                <button type="submit" class="rm-btn-save">Save</button>
+                                <button type="button" class="rm-btn-cancel"
+                                        onclick="cancelRM('lg', {{ b.id }},
+                                            {{ pt.get('lg_inr') or 'null' }},
+                                            {{ pt.get('lg_ticks') or 'null' }},
+                                            {{ 'true' if pt.get('lg_active') else 'false' }})">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Profit Shield -->
+                <div class="rm-card" id="ps-card-{{ b.id }}">
+                    <div class="rm-card-header">
+                        <div class="rm-card-title">
+                            <span class="rm-card-icon ps-icon">⟳</span>
+                            <span>Profit Shield</span>
+                        </div>
+                    </div>
+                    <div class="rm-card-body" id="ps-body-{{ b.id }}">
+                        <form method="post" action="/baskets/{{ b.id }}/rm/profit-shield"
+                              onsubmit="return validatePS({{ b.id }})">
+                            <input type="hidden" name="active" id="ps-active-{{ b.id }}"
+                                   value="{{ '1' if pt.get('ps_active') else '0' }}">
+                            <div class="rm-toggle-row">
+                                <label class="toggle">
+                                    <input type="checkbox" id="ps-toggle-{{ b.id }}"
+                                           {{ 'checked' if pt.get('ps_active') else '' }}
+                                           onchange="toggleRM('ps', {{ b.id }}, this.checked)">
+                                    <span class="toggle-track"></span>
+                                </label>
+                                <span class="rm-toggle-label">Enable Profit Shield</span>
+                            </div>
+                            <div class="rm-fields" id="ps-fields-{{ b.id }}">
+                                <div class="rm-field">
+                                    <label>If profit reaches (₹)</label>
+                                    <input type="number" name="trigger" min="1" step="1"
+                                           id="ps-trigger-{{ b.id }}"
+                                           value="{{ pt.get('ps_trigger') or '' }}"
+                                           placeholder="e.g. 10000">
+                                </div>
+                                <div class="rm-field">
+                                    <label>Lock min profit at (₹)</label>
+                                    <input type="number" name="lock" min="1" step="1"
+                                           id="ps-lock-{{ b.id }}"
+                                           value="{{ pt.get('ps_lock') or '' }}"
+                                           placeholder="e.g. 7000">
+                                </div>
+                                <div class="rm-field-divider"></div>
+                                <div class="rm-field">
+                                    <label>Increase in profit (₹)</label>
+                                    <input type="number" name="step_profit" min="1" step="1"
+                                           id="ps-step_profit-{{ b.id }}"
+                                           value="{{ pt.get('ps_step_profit') or '' }}"
+                                           placeholder="Step size e.g. 2000">
+                                </div>
+                                <div class="rm-field">
+                                    <label>Increase min profit by (₹)</label>
+                                    <input type="number" name="step_lock" min="1" step="1"
+                                           id="ps-step_lock-{{ b.id }}"
+                                           value="{{ pt.get('ps_step_lock') or '' }}"
+                                           placeholder="Step lock e.g. 1500">
+                                </div>
+                            </div>
+                            <div class="rm-card-footer">
+                                <button type="submit" class="rm-btn-save">Save</button>
+                                <button type="button" class="rm-btn-cancel"
+                                        onclick="cancelPS({{ b.id }},
+                                            {{ pt.get('ps_trigger') or 'null' }},
+                                            {{ pt.get('ps_lock') or 'null' }},
+                                            {{ pt.get('ps_step_profit') or 'null' }},
+                                            {{ pt.get('ps_step_lock') or 'null' }},
+                                            {{ 'true' if pt.get('ps_active') else 'false' }})">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="rm-divider"></div>
+
+                <form method="post" action="/baskets/{{ b.id }}/rename" class="rm-form">
+                    <label class="rm-row">
+                        <span>Basket Name</span>
+                        <input type="text" name="name" value="{{ b.name }}">
+                    </label>
+                    <button type="submit" class="btn-ghost-sm">Rename</button>
+                </form>
+
+                <form method="post" action="/baskets/{{ b.id }}/delete"
+                      onsubmit="return confirm('Delete {{ b.name }}? Positions will move to Unallocated.')">
+                    <button type="submit" class="btn-danger-sm">Delete Basket</button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+</section>
+{% endfor %}
+
+<!-- Create New Basket button -->
+<div class="section-footer">
+    <form method="post" action="/baskets/create" style="display:inline">
+        <input type="hidden" name="name" value="">
+        <button type="submit" class="btn-ghost">+ New Basket</button>
+    </form>
+</div>
+
+<!-- Allocate Modal -->
+<div id="alloc-modal" class="modal-backdrop" style="display:none" onclick="closeAllocModal(event)">
+    <div class="modal">
+        <h3>Allocate Position</h3>
+        <p id="alloc-symbol" class="modal-symbol"></p>
+
+        <div class="modal-tabs">
+            <button class="tab-btn active" onclick="switchTab('existing')">Existing Basket</button>
+            <button class="tab-btn" onclick="switchTab('new')">New Basket</button>
+        </div>
+
+        <!-- Existing basket form -->
+        <form method="post" action="/baskets/assign" id="form-existing">
+            <input type="hidden" name="tradingsymbol" id="m-symbol">
+            <input type="hidden" name="exchange" id="m-exchange">
+            <input type="hidden" name="product" id="m-product">
+            <input type="hidden" name="instrument_token" id="m-token">
+            <select name="basket_id" class="modal-select">
+                {% for b in baskets %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-primary" style="margin-top:16px;width:100%">Allocate</button>
+        </form>
+
+        <!-- New basket form -->
+        <form method="post" action="/baskets/new-and-assign" id="form-new" style="display:none">
+            <input type="hidden" name="tradingsymbol" id="mn-symbol">
+            <input type="hidden" name="exchange" id="mn-exchange">
+            <input type="hidden" name="product" id="mn-product">
+            <input type="hidden" name="instrument_token" id="mn-token">
+            <input type="text" name="basket_name" class="modal-select" placeholder="Basket name (optional)">
+            <button type="submit" class="btn-primary" style="margin-top:16px;width:100%">Create & Allocate</button>
+        </form>
+
+        <button class="btn-ghost-sm" style="margin-top:12px;width:100%" onclick="closeAllocModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- Bulk Allocate Modal (multiple positions) -->
+<div id="bulk-alloc-modal" class="modal-backdrop" style="display:none" onclick="closeBulkModal(event)">
+    <div class="modal">
+        <h3>Allocate Selected</h3>
+        <p id="bulk-alloc-count" class="modal-symbol"></p>
+
+        <div class="modal-tabs">
+            <button class="tab-btn active" onclick="switchBulkTab('existing')">Existing Basket</button>
+            <button class="tab-btn" onclick="switchBulkTab('new')">New Basket</button>
+        </div>
+
+        <div id="bulk-form-existing">
+            <select id="bulk-basket-id" class="modal-select">
+                {% for b in baskets %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn-primary" style="margin-top:16px;width:100%"
+                    onclick="submitBulkAlloc('existing')">Allocate</button>
+        </div>
+
+        <div id="bulk-form-new" style="display:none">
+            <input type="text" id="bulk-basket-name" class="modal-select" placeholder="Basket name (optional)">
+            <button class="btn-primary" style="margin-top:16px;width:100%"
+                    onclick="submitBulkAlloc('new')">Create & Allocate</button>
+        </div>
+
+        <button class="btn-ghost-sm" style="margin-top:12px;width:100%" onclick="closeBulkModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- Hidden bulk-unallocate form (submitted via JS) -->
+<form id="bulk-unalloc-form" method="post" action="/baskets/unassign-bulk" style="display:none">
+    <div id="bulk-unalloc-inputs"></div>
+</form>
+
+<!-- Hidden bulk-assign form -->
+<form id="bulk-assign-form" method="post" action="/baskets/assign-bulk" style="display:none">
+    <input type="hidden" name="basket_id" id="bulk-assign-basket-id">
+    <input type="hidden" name="basket_name" id="bulk-assign-basket-name">
+    <div id="bulk-assign-inputs"></div>
+</form>
+
+<script>
+window.__DEMO_MODE__ = {{ demo_mode | default(false) | tojson }};
+
+// Basket RM active flags — keyed by basket id (string)
+window.__BASKET_RM__ = {
+{% for b in baskets %}  "{{ b.id }}": {{ 'true' if b.rm_enabled else 'false' }}{% if not loop.last %},{% endif %}
+
+{% endfor %}};
+
+function showRMError(anchorEl, msg) {
+    // Remove any existing error near this anchor
+    const existing = anchorEl.parentElement.querySelector('.rm-guard-err');
+    if (existing) existing.remove();
+    const err = document.createElement('p');
+    err.className = 'rm-guard-err';
+    err.textContent = msg;
+    anchorEl.insertAdjacentElement('afterend', err);
+    setTimeout(() => err.remove(), 4000);
+}
+
+// ── Basket expand/collapse ────────────────────────────────────────
+function toggleBasket(id) {
+    const body = document.getElementById('body-' + id);
+    const chevron = document.getElementById('chevron-' + id);
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    chevron.style.transform = open ? '' : 'rotate(90deg)';
+}
+
+function openBasketEdit(id) {
+    const body = document.getElementById('body-' + id);
+    const chevron = document.getElementById('chevron-' + id);
+    body.style.display = 'block';
+    chevron.style.transform = 'rotate(90deg)';
+    document.getElementById('basket-' + id).scrollIntoView({behavior:'smooth'});
+}
+
+// ── Unallocated checkboxes ────────────────────────────────────────
+function toggleAllUnalloc(master) {
+    document.querySelectorAll('.unalloc-check').forEach(cb => cb.checked = master.checked);
+    updateAllocBtn();
+}
+
+function updateAllocBtn() {
+    const checked = document.querySelectorAll('.unalloc-check:checked').length;
+    const btn = document.getElementById('alloc-selected-btn');
+    btn.style.display = checked > 0 ? 'inline-block' : 'none';
+    btn.textContent = checked === 1 ? 'Allocate Selected (1)' : `Allocate Selected (${checked})`;
+}
+
+// ── Basket checkboxes ─────────────────────────────────────────────
+function toggleAllBasket(basketId, master) {
+    document.querySelectorAll('.basket-check-' + basketId).forEach(cb => cb.checked = master.checked);
+    updateUnallocBtn(basketId);
+}
+
+function updateUnallocBtn(basketId) {
+    const checked = document.querySelectorAll('.basket-check-' + basketId + ':checked').length;
+    const btn = document.getElementById('unalloc-btn-' + basketId);
+    btn.style.display = checked > 0 ? 'inline-block' : 'none';
+    btn.textContent = checked === 1 ? 'Unallocate Selected (1)' : `Unallocate Selected (${checked})`;
+}
+
+function unallocateSelected(basketId) {
+    const checked = document.querySelectorAll('.basket-check-' + basketId + ':checked');
+    if (!checked.length) return;
+    if (window.__BASKET_RM__[String(basketId)]) {
+        const header = document.querySelector('#basket-' + basketId + ' .basket-pos-header');
+        showRMError(header, 'Deactivate Risk Management before unallocating positions.');
+        return;
+    }
+    const container = document.getElementById('bulk-unalloc-inputs');
+    container.innerHTML = '';
+    checked.forEach(cb => {
+        container.innerHTML += `
+            <input type="hidden" name="tradingsymbol" value="${cb.dataset.symbol}">
+            <input type="hidden" name="exchange" value="${cb.dataset.exchange}">
+            <input type="hidden" name="product" value="${cb.dataset.product}">
+        `;
+    });
+    document.getElementById('bulk-unalloc-form').submit();
+}
+
+// ── Single-position allocate modal ───────────────────────────────
+function openAllocModal(symbol, exchange, product, token) {
+    document.getElementById('alloc-symbol').textContent = symbol + ' · ' + exchange;
+    ['m-symbol','mn-symbol'].forEach(id => document.getElementById(id).value = symbol);
+    ['m-exchange','mn-exchange'].forEach(id => document.getElementById(id).value = exchange);
+    ['m-product','mn-product'].forEach(id => document.getElementById(id).value = product);
+    ['m-token','mn-token'].forEach(id => document.getElementById(id).value = token);
+    document.getElementById('alloc-modal').style.display = 'flex';
+}
+
+function closeAllocModal(event) {
+    if (!event || event.target.id === 'alloc-modal')
+        document.getElementById('alloc-modal').style.display = 'none';
+}
+
+function switchTab(tab) {
+    document.getElementById('form-existing').style.display = tab === 'existing' ? 'block' : 'none';
+    document.getElementById('form-new').style.display = tab === 'new' ? 'block' : 'none';
+    document.querySelectorAll('#alloc-modal .tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', (i === 0 && tab === 'existing') || (i === 1 && tab === 'new'));
+    });
+}
+
+// ── Bulk allocate modal ───────────────────────────────────────────
+function openBulkAllocModal() {
+    const checked = document.querySelectorAll('.unalloc-check:checked');
+    document.getElementById('bulk-alloc-count').textContent =
+        `${checked.length} position${checked.length > 1 ? 's' : ''} selected`;
+    document.getElementById('bulk-alloc-modal').style.display = 'flex';
+}
+
+function closeBulkModal(event) {
+    if (!event || event.target.id === 'bulk-alloc-modal')
+        document.getElementById('bulk-alloc-modal').style.display = 'none';
+}
+
+function switchBulkTab(tab) {
+    document.getElementById('bulk-form-existing').style.display = tab === 'existing' ? 'block' : 'none';
+    document.getElementById('bulk-form-new').style.display = tab === 'new' ? 'block' : 'none';
+    document.querySelectorAll('#bulk-alloc-modal .tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', (i === 0 && tab === 'existing') || (i === 1 && tab === 'new'));
+    });
+}
+
+function submitBulkAlloc(mode) {
+    const checked = document.querySelectorAll('.unalloc-check:checked');
+    if (!checked.length) return;
+    if (mode === 'existing') {
+        const bid = document.getElementById('bulk-basket-id').value;
+        if (window.__BASKET_RM__[String(bid)]) {
+            const btn = document.querySelector('#bulk-form-existing .btn-primary');
+            showRMError(btn, 'Deactivate Risk Management on this basket before adding positions.');
+            return;
+        }
+    }
+    const container = document.getElementById('bulk-assign-inputs');
+    container.innerHTML = '';
+    checked.forEach(cb => {
+        container.innerHTML += `
+            <input type="hidden" name="tradingsymbol" value="${cb.dataset.symbol}">
+            <input type="hidden" name="exchange" value="${cb.dataset.exchange}">
+            <input type="hidden" name="product" value="${cb.dataset.product}">
+            <input type="hidden" name="instrument_token" value="${cb.dataset.token}">
+        `;
+    });
+    if (mode === 'existing') {
+        document.getElementById('bulk-assign-basket-id').value =
+            document.getElementById('bulk-basket-id').value;
+        document.getElementById('bulk-assign-basket-name').value = '';
+    } else {
+        document.getElementById('bulk-assign-basket-id').value = '';
+        document.getElementById('bulk-assign-basket-name').value =
+            document.getElementById('bulk-basket-name').value;
+    }
+    document.getElementById('bulk-assign-form').submit();
+}
+
+// ── RM toggle ─────────────────────────────────────────────────
+function toggleRM(prefix, basketId, active) {
+    const fields = document.getElementById(prefix + '-fields-' + basketId);
+    const hidden = document.getElementById(prefix + '-active-' + basketId);
+    if (hidden) hidden.value = active ? '1' : '0';
+    if (fields) {
+        fields.classList.toggle('rm-inactive', !active);
+        fields.querySelectorAll('input[type="number"]').forEach(el => el.disabled = !active);
+    }
+}
+
+// Apply disabled state from saved values on page load
+document.querySelectorAll('.toggle input[type="checkbox"]').forEach(cb => {
+    const parts = cb.id.split('-');  // e.g. ['pt','toggle','1']
+    const prefix = parts[0];
+    const basketId = parts[2];
+    toggleRM(prefix, basketId, cb.checked);
+});
+
+// ── Cancel handlers ───────────────────────────────────────────
+function cancelRM(prefix, basketId, inr, ticks, active) {
+    const inrEl   = document.getElementById(prefix + '-inr-'   + basketId);
+    const ticksEl = document.getElementById(prefix + '-ticks-' + basketId);
+    const toggle  = document.getElementById(prefix + '-toggle-' + basketId);
+    if (inrEl)   inrEl.value   = inr   !== null ? inr   : '';
+    if (ticksEl) ticksEl.value = ticks !== null ? ticks : '';
+    toggle.checked = active;
+    toggleRM(prefix, basketId, active);
+}
+
+function cancelPS(basketId, trigger, lock, stepProfit, stepLock, active) {
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val !== null ? val : '';
+    };
+    set('ps-trigger-'     + basketId, trigger);
+    set('ps-lock-'        + basketId, lock);
+    set('ps-step_profit-' + basketId, stepProfit);
+    set('ps-step_lock-'   + basketId, stepLock);
+    const toggle = document.getElementById('ps-toggle-' + basketId);
+    toggle.checked = active;
+    toggleRM('ps', basketId, active);
+}
+
+// ── Validation ────────────────────────────────────────────────
+function validatePT(basketId) {
+    const inr = parseFloat(document.getElementById('pt-inr-' + basketId).value);
+    if (!inr || inr <= 0) { alert('Profit Target: INR Value must be a positive number.'); return false; }
+    return true;
+}
+
+function validatePS(basketId) {
+    const v = id => parseFloat(document.getElementById(id + basketId).value) || 0;
+    const trigger    = v('ps-trigger-');
+    const lock       = v('ps-lock-');
+    const stepProfit = v('ps-step_profit-');
+    const stepLock   = v('ps-step_lock-');
+    const ptInr      = parseFloat(document.getElementById('pt-inr-' + basketId)?.value) || 0;
+
+    if (trigger <= 0 || lock <= 0) {
+        alert('Profit Shield: All INR values must be positive.'); return false;
+    }
+    if (ptInr > 0 && trigger > ptInr) {
+        alert(`Profit Shield: "If profit reaches" (₹${trigger.toLocaleString()}) cannot exceed Profit Target (₹${ptInr.toLocaleString()}).`);
+        return false;
+    }
+    if (lock > trigger) {
+        alert(`Profit Shield: "Lock min profit" (₹${lock.toLocaleString()}) must be ≤ "If profit reaches" (₹${trigger.toLocaleString()}).`);
+        return false;
+    }
+    if (stepProfit > 0 && ptInr > 0 && (trigger + stepProfit) >= ptInr) {
+        alert(`Profit Shield: Trigger + Step (₹${(trigger+stepProfit).toLocaleString()}) must be less than Profit Target (₹${ptInr.toLocaleString()}).`);
+        return false;
+    }
+    if (stepLock > 0 && stepProfit > 0 && (lock + stepLock) >= (trigger + stepProfit)) {
+        alert(`Profit Shield: Lock + Step Lock (₹${(lock+stepLock).toLocaleString()}) must be less than Trigger + Step Profit (₹${(trigger+stepProfit).toLocaleString()}).`);
+        return false;
+    }
+    return true;
+}
+
+// ── Auto-refresh during market hours (disabled in demo) ───────
+function autoRefresh() {
+    if (window.__DEMO_MODE__) return;
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const ist = new Date(utc + 5.5 * 3600000);
+    const h = ist.getHours(), m = ist.getMinutes();
+    const inMarket = (h > 9 || (h === 9 && m >= 15)) && h < 15;
+    if (inMarket) setTimeout(() => location.reload(), 30000);
+}
+autoRefresh();
+</script>
+{% endblock %}

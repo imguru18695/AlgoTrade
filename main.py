@@ -1,0 +1,106 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from database import init_db
+from auth.routes import router as auth_router
+from auth.token_store import load_token, load_user_id
+from baskets.routes import router as baskets_router
+from baskets.service import list_baskets, get_assigned_positions, get_rm
+from kite.positions import fetch_positions
+from kite import ticker
+
+logging.basicConfig(level=logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+    ticker.stop()
+
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.include_router(auth_router)
+app.include_router(baskets_router)
+
+templates = Jinja2Templates(directory="templates")
+
+
+def _position_key(p: dict) -> str:
+    return f"{p['tradingsymbol']}|{p['exchange']}|{p['product']}"
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    if not load_token():
+        return RedirectResponse(url="/auth/login")
+
+    try:
+        positions = fetch_positions()
+    except Exception as e:
+        logging.error(f"Failed to fetch positions: {e}")
+        return RedirectResponse(url="/auth/login")
+
+    # Refresh ticker subscriptions whenever the page loads
+    tokens = [p["instrument_token"] for p in positions if p.get("instrument_token")]
+    if tokens:
+        ticker.subscribe(tokens)
+
+    # Merge live LTP into positions
+    for p in positions:
+        live = ticker.get_ltp(p.get("instrument_token", 0))
+        if live:
+            p["last_price"] = live
+            qty = p["quantity"]
+            avg = p["average_price"]
+            mult = p["multiplier"]
+            # Recalculate P&L: (ltp - avg) * qty * multiplier for longs, reversed for shorts
+            p["pnl"] = (live - avg) * qty * mult
+
+    assigned = get_assigned_positions()
+    baskets = list_baskets()
+
+    # Build basket_id → positions map
+    basket_positions: dict[int, list[dict]] = {b["id"]: [] for b in baskets}
+    unallocated: list[dict] = []
+
+    for p in positions:
+        key = _position_key(p)
+        bid = assigned.get(key)
+        if bid and bid in basket_positions:
+            basket_positions[bid].append(p)
+        else:
+            unallocated.append(p)
+
+    # Compute basket MTM P&L
+    for b in baskets:
+        b["pnl"] = sum(p["pnl"] for p in basket_positions[b["id"]])
+        b["positions"] = basket_positions[b["id"]]
+        b["rm"] = get_rm(b["id"])
+        b["rm_enabled"] = any([
+            b["rm"].get("max_loss"),
+            b["rm"].get("target_profit"),
+            b["rm"].get("trail_profit"),
+        ])
+
+    # KPI counts
+    active_baskets = [b for b in baskets if len(b["positions"]) > 0]
+    baskets_without_rm = [b for b in active_baskets if not b["rm_enabled"]]
+
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "positions": positions,
+        "unallocated": unallocated,
+        "baskets": baskets,
+        "active_baskets_count": len(active_baskets),
+        "baskets_without_rm_count": len(baskets_without_rm),
+        "total_pnl": sum(p["pnl"] for p in positions),
+        "user_id": load_user_id(),
+    })
