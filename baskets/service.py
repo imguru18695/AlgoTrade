@@ -7,11 +7,9 @@ def list_baskets() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT b.id, b.name,
-                   COUNT(bp.id) AS position_count,
-                   r.max_loss, r.target_profit, r.trail_profit, r.trail_trigger
+                   COUNT(bp.id) AS position_count
             FROM baskets b
             LEFT JOIN basket_positions bp ON bp.basket_id = b.id
-            LEFT JOIN basket_rm r ON r.basket_id = b.id
             GROUP BY b.id
             ORDER BY b.id
         """).fetchall()

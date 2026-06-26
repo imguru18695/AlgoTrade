@@ -84,11 +84,9 @@ async def index(request: Request):
         b["pnl"] = sum(p["pnl"] for p in basket_positions[b["id"]])
         b["positions"] = basket_positions[b["id"]]
         b["rm"] = get_rm(b["id"])
-        b["rm_enabled"] = any([
-            b["rm"].get("max_loss"),
-            b["rm"].get("target_profit"),
-            b["rm"].get("trail_profit"),
-        ])
+        b["rm_enabled"] = bool(
+            b["rm"].get("pt_active") or b["rm"].get("lg_active") or b["rm"].get("ps_active")
+        )
 
     # KPI counts
     active_baskets = [b for b in baskets if len(b["positions"]) > 0]
