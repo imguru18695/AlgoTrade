@@ -99,3 +99,38 @@ async def new_and_assign(
     basket = service.create_basket(name)
     service.assign_position(basket["id"], tradingsymbol, exchange, product, instrument_token)
     return RedirectResponse(url="/", status_code=302)
+
+
+@router.post("/assign-bulk")
+async def assign_bulk(request: Request):
+    form = await request.form()
+    basket_id = form.get("basket_id")
+    basket_name = (form.get("basket_name") or "").strip()
+    symbols = form.getlist("tradingsymbol")
+    exchanges = form.getlist("exchange")
+    products = form.getlist("product")
+    tokens = form.getlist("instrument_token")
+
+    if basket_id:
+        bid = int(basket_id)
+    else:
+        baskets = service.list_baskets()
+        name = basket_name or f"Basket {len(baskets) + 1}"
+        basket = service.create_basket(name)
+        bid = basket["id"]
+
+    for sym, exch, prod, tok in zip(symbols, exchanges, products, tokens):
+        service.assign_position(bid, sym, exch, prod, int(tok) if tok else None)
+
+    return RedirectResponse(url="/", status_code=302)
+
+
+@router.post("/unassign-bulk")
+async def unassign_bulk(request: Request):
+    form = await request.form()
+    symbols = form.getlist("tradingsymbol")
+    exchanges = form.getlist("exchange")
+    products = form.getlist("product")
+    for sym, exch, prod in zip(symbols, exchanges, products):
+        service.unassign_position(sym, exch, prod)
+    return RedirectResponse(url="/", status_code=302)
