@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlgoPlatform</title>
-    <link rel="stylesheet" href="/static/style.css?v=15">
+    <link rel="stylesheet" href="/static/style.css?v=16">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body>
@@ -14,11 +14,19 @@
             {% if user_id %}
             <span class="user-id">{{ user_id }}</span>
             {% endif %}
+            <button class="btn-ghost btn-refresh" id="refresh-btn" onclick="manualRefresh(this)">⟳ Refresh</button>
             <a href="/auth/logout" class="btn-ghost">Logout</a>
         </nav>
     </header>
     <main>
         {% block content %}{% endblock %}
     </main>
+    <script>
+    function manualRefresh(btn) {
+        btn.disabled = true;
+        btn.textContent = '⟳ Refreshing…';
+        location.reload();
+    }
+    </script>
 </body>
 </html>

@@ -91,6 +91,7 @@
             <span class="rm-chip {{ 'rm-on' if b.rm.get('pt_active') else 'rm-off' }}">Profit Target</span>
             <span class="rm-chip {{ 'rm-on' if b.rm.get('lg_active') else 'rm-off' }}">Loss Guard</span>
             <span class="rm-chip {{ 'rm-on' if b.rm.get('ps_active') else 'rm-off' }}">Profit Shield</span>
+            <span class="rm-chip {{ 'rm-on' if b.rm.get('eod_exit') else 'rm-off' }}">EOD Exit</span>
         </div>
         <div class="basket-pnl">
             <span class="{{ 'profit' if b.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(b.pnl) }}</span>
@@ -110,9 +111,19 @@
             <div class="basket-positions">
                 <div class="basket-pos-header">
                     <h3>Positions</h3>
-                    <button class="btn-danger btn-sm-action" id="unalloc-btn-{{ b.id }}"
-                            style="display:none"
-                            onclick="unallocateSelected({{ b.id }})">Unallocate Selected</button>
+                    <div class="basket-pos-actions">
+                        <form method="post" action="/baskets/{{ b.id }}/order-type" class="order-type-form">
+                            <div class="order-type-toggle">
+                                <button type="submit" name="order_type" value="LIMIT"
+                                        class="ot-btn {{ 'ot-active' if b.order_type == 'LIMIT' else '' }}">Limit</button>
+                                <button type="submit" name="order_type" value="MARKET"
+                                        class="ot-btn {{ 'ot-active' if b.order_type == 'MARKET' else '' }}">Market</button>
+                            </div>
+                        </form>
+                        <button class="btn-danger btn-sm-action" id="unalloc-btn-{{ b.id }}"
+                                style="display:none"
+                                onclick="unallocateSelected({{ b.id }})">Unallocate Selected</button>
+                    </div>
                 </div>
 
                 {% if b.positions %}
@@ -331,6 +342,25 @@
                         </form>
                     </div>
                 </div>
+
+                <!-- EOD Auto-Exit -->
+                <div class="rm-divider"></div>
+                <form method="post" action="/baskets/{{ b.id }}/rm/eod-exit" class="rm-eod-form">
+                    <div class="rm-eod-row">
+                        <div class="rm-eod-label">
+                            <span class="rm-eod-title">EOD Auto-Exit</span>
+                            <span class="rm-eod-hint">Exits all positions at 3:25 PM</span>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" name="eod_checkbox" id="eod-toggle-{{ b.id }}"
+                                   {{ 'checked' if b.rm.get('eod_exit') else '' }}
+                                   onchange="submitEodToggle({{ b.id }}, this.checked)">
+                            <span class="toggle-track"></span>
+                        </label>
+                        <input type="hidden" name="enabled" id="eod-enabled-{{ b.id }}"
+                               value="{{ '1' if b.rm.get('eod_exit') else '0' }}">
+                    </div>
+                </form>
 
                 <div class="rm-divider"></div>
 
@@ -682,6 +712,13 @@ function validatePS(basketId) {
         return false;
     }
     return true;
+}
+
+// ── EOD toggle (auto-submits form) ───────────────────────────
+function submitEodToggle(basketId, enabled) {
+    const hidden = document.getElementById('eod-enabled-' + basketId);
+    if (hidden) hidden.value = enabled ? '1' : '0';
+    hidden.closest('form').submit();
 }
 
 // ── Auto-refresh during market hours (disabled in demo) ───────

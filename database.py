@@ -10,10 +10,22 @@ def get_conn() -> sqlite3.Connection:
 
 def init_db():
     with get_conn() as conn:
+        # Safe migrations for existing DBs
+        for migration in [
+            "ALTER TABLE basket_rm ADD COLUMN eod_exit INTEGER DEFAULT 0",
+            "ALTER TABLE baskets ADD COLUMN order_type TEXT DEFAULT 'LIMIT'",
+        ]:
+            try:
+                conn.execute(migration)
+                conn.commit()
+            except Exception:
+                pass
+
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS baskets (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 name        TEXT NOT NULL,
+                order_type  TEXT DEFAULT 'LIMIT',
                 created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -42,6 +54,8 @@ def init_db():
                 ps_trigger      REAL,
                 ps_lock         REAL,
                 ps_step_profit  REAL,
-                ps_step_lock    REAL
+                ps_step_lock    REAL,
+                -- EOD auto-exit
+                eod_exit        INTEGER DEFAULT 0
             );
         """)

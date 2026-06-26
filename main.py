@@ -14,13 +14,37 @@ from baskets.routes import router as baskets_router
 from baskets.service import list_baskets, get_assigned_positions, get_rm
 from kite.positions import fetch_positions
 from kite import ticker
+from kite.orders import place_exit_orders
+from rm.engine import run_engine, reset_basket
 
 logging.basicConfig(level=logging.INFO)
+
+# Cache of basket context for the engine (updated on each page load)
+_basket_cache: list[dict] = []
+
+
+def _get_baskets_for_engine() -> list[dict]:
+    return _basket_cache
+
+
+def _exit_fn(basket_id: int, positions: list, reason: str):
+    # Find order_type for this basket
+    order_type = next(
+        (b.get("order_type", "LIMIT") for b in _basket_cache if b["id"] == basket_id),
+        "LIMIT"
+    )
+    asyncio.create_task(place_exit_orders(basket_id, positions, reason, order_type))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    asyncio.create_task(run_engine(
+        get_baskets_fn=_get_baskets_for_engine,
+        ltp_fn=ticker.get_ltp,
+        exit_fn=_exit_fn,
+        no_ltp_fn=lambda: logging.warning("RM engine: no live prices available."),
+    ))
     yield
     ticker.stop()
 
@@ -66,6 +90,7 @@ async def index(request: Request):
 
     assigned = get_assigned_positions()
     baskets = list_baskets()
+    global _basket_cache
 
     # Build basket_id → positions map
     basket_positions: dict[int, list[dict]] = {b["id"]: [] for b in baskets}
@@ -81,6 +106,7 @@ async def index(request: Request):
 
     # Compute basket MTM P&L
     for b in baskets:
+        b["order_type"] = b.get("order_type", "LIMIT")
         b["positions"] = basket_positions[b["id"]]
         b["pnl"] = sum(p["pnl"] for p in b["positions"])
         basket_cost = sum(
@@ -90,8 +116,12 @@ async def index(request: Request):
         b["pnl_pct"] = (b["pnl"] / basket_cost * 100) if basket_cost else 0.0
         b["rm"] = get_rm(b["id"])
         b["rm_enabled"] = bool(
-            b["rm"].get("pt_active") or b["rm"].get("lg_active") or b["rm"].get("ps_active")
+            b["rm"].get("pt_active") or b["rm"].get("lg_active") or
+            b["rm"].get("ps_active") or b["rm"].get("eod_exit")
         )
+
+    # Update engine cache with fully-built basket context
+    _basket_cache = baskets
 
     # KPI counts
     active_baskets = [b for b in baskets if len(b["positions"]) > 0]

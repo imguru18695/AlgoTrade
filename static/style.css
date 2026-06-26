@@ -326,6 +326,46 @@ main {
 
 .rm-divider { border-top: 1px solid var(--border); margin: 16px 0; }
 
+/* ── Order type toggle ───────────────────────────────────────── */
+.basket-pos-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.order-type-form { margin: 0; }
+.order-type-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+.ot-btn {
+    background: transparent;
+    color: var(--text-2);
+    border: none;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ot-btn:first-child { border-right: 1px solid var(--border); }
+.ot-btn:hover { background: var(--surface-hov); color: var(--text); }
+.ot-btn.ot-active { background: var(--accent-grad); color: #fff; }
+
+.rm-eod-form { margin: 0; }
+.rm-eod-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+}
+.rm-eod-label { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.rm-eod-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.rm-eod-hint  { font-size: 11px; color: var(--text-3); }
+
 /* ── Positions table ──────────────────────────────────────────── */
 .positions-table {
     width: 100%;
@@ -484,6 +524,8 @@ main {
     transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--border-hov); background: var(--surface-hov); }
+.btn-refresh { font-size: 13px; letter-spacing: 0.01em; }
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-ghost-sm {
     background: transparent;

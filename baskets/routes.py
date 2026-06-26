@@ -2,6 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from baskets import service
+from rm.engine import reset_basket
 from typing import Optional
 
 router = APIRouter(prefix="/baskets")
@@ -37,6 +38,7 @@ async def save_profit_target(
     ticks: Optional[int] = Form(default=None),
 ):
     service.save_rm_profit_target(basket_id, active == "1", inr, ticks)
+    reset_basket(basket_id)
     return RedirectResponse(url="/", status_code=302)
 
 
@@ -48,6 +50,7 @@ async def save_loss_guard(
     ticks: Optional[int] = Form(default=None),
 ):
     service.save_rm_loss_guard(basket_id, active == "1", inr, ticks)
+    reset_basket(basket_id)
     return RedirectResponse(url="/", status_code=302)
 
 
@@ -61,6 +64,22 @@ async def save_profit_shield(
     step_lock: Optional[float] = Form(default=None),
 ):
     service.save_rm_profit_shield(basket_id, active == "1", trigger, lock, step_profit, step_lock)
+    reset_basket(basket_id)
+    return RedirectResponse(url="/", status_code=302)
+
+
+@router.post("/{basket_id}/order-type")
+async def save_order_type(basket_id: int, order_type: str = Form(...)):
+    service.save_order_type(basket_id, order_type)
+    return RedirectResponse(url="/", status_code=302)
+
+
+@router.post("/{basket_id}/rm/eod-exit")
+async def save_eod_exit(
+    basket_id: int,
+    enabled: Optional[str] = Form(default=None),
+):
+    service.save_eod_exit(basket_id, enabled == "1")
     return RedirectResponse(url="/", status_code=302)
 
 
