@@ -21,14 +21,14 @@ def _exit_side(quantity: int) -> str:
     return "SELL" if quantity > 0 else "BUY"
 
 
-def _get_best_price(kite, tradingsymbol: str, exchange: str, side: str) -> float | None:
+async def _get_best_price(kite, tradingsymbol: str, exchange: str, side: str) -> float | None:
     """
     Fetch best bid (for SELL) or best ask (for BUY) from market depth.
     Returns None if depth is unavailable.
     """
     try:
         key = f"{exchange}:{tradingsymbol}"
-        quote = kite.quote([key])
+        quote = await asyncio.to_thread(kite.quote, [key])
         depth = quote[key]["depth"]
         if side == "SELL":
             bids = depth["buy"]
@@ -41,27 +41,27 @@ def _get_best_price(kite, tradingsymbol: str, exchange: str, side: str) -> float
         return None
 
 
-def _live_qty(tradingsymbol: str, exchange: str, product: str) -> int:
-    """Fetch current open quantity from Kite (pre-exit verification)."""
-    try:
-        positions = fetch_positions()
-        for p in positions:
-            if (p["tradingsymbol"] == tradingsymbol and
-                    p["exchange"] == exchange and
-                    p["product"] == product):
-                return p["quantity"]
-    except Exception as e:
-        logger.error(f"Failed to verify live qty for {tradingsymbol}: {e}")
+async def _live_qty(tradingsymbol: str, exchange: str, product: str) -> int:
+    """
+    Fetch current open quantity from Kite (pre-exit verification).
+    Raises on fetch failure so callers can distinguish 'closed' from 'error'.
+    """
+    positions = await asyncio.to_thread(fetch_positions)
+    for p in positions:
+        if (p["tradingsymbol"] == tradingsymbol and
+                p["exchange"] == exchange and
+                p["product"] == product):
+            return p["quantity"]
     return 0
 
 
-def _get_order_status(kite, order_id: str) -> tuple[str, int]:
+async def _get_order_status(kite, order_id: str) -> tuple[str, int]:
     """
     Returns (status, filled_qty) for a given order_id.
     Status values: COMPLETE, OPEN, CANCELLED, REJECTED, etc.
     """
     try:
-        orders = kite.orders()
+        orders = await asyncio.to_thread(kite.orders)
         for o in orders:
             if str(o["order_id"]) == str(order_id):
                 return o["status"], o.get("filled_quantity", 0)
@@ -98,8 +98,14 @@ async def _exit_one(kite, position: dict, order_type: str, basket_id: int):
     product  = position["product"]
     side     = _exit_side(position["quantity"])
 
-    # Pre-exit verification — confirm position is still open in Kite
-    live_qty = _live_qty(sym, exchange, product)
+    # Pre-exit verification — confirm position is still open in Kite.
+    # Let fetch errors propagate so we don't silently skip real positions.
+    try:
+        live_qty = await _live_qty(sym, exchange, product)
+    except Exception as e:
+        logger.error(f"Basket {basket_id}: failed to verify qty for {sym}, aborting exit: {e}")
+        return
+
     if live_qty == 0:
         logger.info(f"Basket {basket_id}: {sym} already closed in Kite, skipping.")
         return
@@ -115,7 +121,8 @@ async def _exit_one(kite, position: dict, order_type: str, basket_id: int):
 
 async def _place_market(kite, sym, exchange, product, side, qty, basket_id):
     try:
-        order_id = kite.place_order(
+        order_id = await asyncio.to_thread(
+            kite.place_order,
             variety=kite.VARIETY_REGULAR,
             exchange=exchange,
             tradingsymbol=sym,
@@ -137,7 +144,7 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
         attempt += 1
 
         # Fetch fresh best bid/ask
-        price = _get_best_price(kite, sym, exchange, side)
+        price = await _get_best_price(kite, sym, exchange, side)
         if price is None:
             logger.warning(f"Basket {basket_id}: no depth for {sym}, waiting 5s...")
             await asyncio.sleep(LIMIT_CHECK_INTERVAL)
@@ -146,7 +153,8 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
         # Place limit order
         order_id = None
         try:
-            order_id = kite.place_order(
+            order_id = await asyncio.to_thread(
+                kite.place_order,
                 variety=kite.VARIETY_REGULAR,
                 exchange=exchange,
                 tradingsymbol=sym,
@@ -165,7 +173,7 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
 
         # Wait then check fill status
         await asyncio.sleep(LIMIT_CHECK_INTERVAL)
-        status, filled_qty = _get_order_status(kite, order_id)
+        status, filled_qty = await _get_order_status(kite, order_id)
         logger.info(f"Basket {basket_id}: {sym} order {order_id} status={status} filled={filled_qty}")
 
         if status == "COMPLETE":
@@ -173,14 +181,20 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
             remaining_qty = 0
 
         elif status in ("OPEN", "TRIGGER PENDING"):
-            # Cancel and retry with updated price for unfilled quantity
+            # Cancel and only reduce remaining_qty if cancel succeeds.
+            # If cancel fails, keep original remaining_qty to retry the full unfilled amount.
             unfilled = remaining_qty - filled_qty
             try:
-                kite.cancel_order(variety=kite.VARIETY_REGULAR, order_id=order_id)
+                await asyncio.to_thread(
+                    kite.cancel_order,
+                    variety=kite.VARIETY_REGULAR,
+                    order_id=order_id,
+                )
                 logger.info(f"Basket {basket_id}: cancelled {order_id}, unfilled={unfilled}, retrying...")
+                remaining_qty = unfilled
             except Exception as e:
                 logger.error(f"Basket {basket_id}: cancel failed for {order_id}: {e}")
-            remaining_qty = unfilled
+                # Don't update remaining_qty — the original order may still be live.
 
         elif status in ("REJECTED", "CANCELLED"):
             logger.warning(f"Basket {basket_id}: order {order_id} {status}, retrying...")

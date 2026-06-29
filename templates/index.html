@@ -717,8 +717,10 @@ function validatePS(basketId) {
 // ── EOD toggle (auto-submits form) ───────────────────────────
 function submitEodToggle(basketId, enabled) {
     const hidden = document.getElementById('eod-enabled-' + basketId);
-    if (hidden) hidden.value = enabled ? '1' : '0';
-    hidden.closest('form').submit();
+    if (hidden) {
+        hidden.value = enabled ? '1' : '0';
+        hidden.closest('form').submit();
+    }
 }
 
 // ── Auto-refresh during market hours (disabled in demo) ───────
