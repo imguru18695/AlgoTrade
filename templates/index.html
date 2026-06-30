@@ -86,6 +86,9 @@
         <div class="basket-title">
             <span class="basket-name">{{ b.name }}</span>
             <span class="badge">{{ b.positions|length }} pos</span>
+            {% if b.fired %}
+            <span class="badge badge-fired">FIRED — Re-arm to re-enable RM</span>
+            {% endif %}
         </div>
         <div class="basket-meta">
             <span class="rm-chip {{ 'rm-on' if b.rm.get('pt_active') else 'rm-off' }}">Profit Target</span>
@@ -372,8 +375,13 @@
                     <button type="submit" class="btn-ghost-sm">Rename</button>
                 </form>
 
+                <form method="post" action="/baskets/{{ b.id }}/rearm"
+                      onsubmit="return confirm('Re-arm ' + {{ b.name | tojson }} + '? This resets the fired flag, PS floor, and tick counters so the engine evaluates this basket fresh.')">
+                    <button type="submit" class="btn-ghost-sm">Re-arm RM</button>
+                </form>
+
                 <form method="post" action="/baskets/{{ b.id }}/delete"
-                      onsubmit="return confirm('Delete {{ b.name }}? Positions will move to Unallocated.')">
+                      onsubmit="return confirm('Delete ' + {{ b.name | tojson }} + '? Positions will move to Unallocated.')">
                     <button type="submit" class="btn-danger-sm">Delete Basket</button>
                 </form>
             </div>

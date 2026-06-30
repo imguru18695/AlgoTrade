@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from baskets import service
-from rm.engine import reset_basket
+from rm.engine import reset_basket, rearm_basket
 from typing import Optional
 
 router = APIRouter(prefix="/baskets")
@@ -65,6 +65,12 @@ async def save_profit_shield(
 ):
     service.save_rm_profit_shield(basket_id, active == "1", trigger, lock, step_profit, step_lock)
     reset_basket(basket_id)
+    return RedirectResponse(url="/", status_code=302)
+
+
+@router.post("/{basket_id}/rearm")
+async def rearm(basket_id: int):
+    rearm_basket(basket_id)
     return RedirectResponse(url="/", status_code=302)
 
 

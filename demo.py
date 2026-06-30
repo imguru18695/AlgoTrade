@@ -12,7 +12,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
-from rm.engine import run_engine, reset_basket
+from rm.engine import run_engine, reset_basket, rearm_basket, get_basket_state
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 _exit_log: list[dict] = []
 
 
-def _demo_exit(basket_id: int, positions: list, reason: str):
+async def _demo_exit(basket_id: int, positions: list, reason: str):
     entry = {"basket_id": basket_id, "reason": reason,
              "symbols": [p["tradingsymbol"] for p in positions]}
     _exit_log.append(entry)
@@ -116,6 +116,7 @@ _rm: dict[int, dict] = {
         "lg_active": True,  "lg_inr": 10000, "lg_ticks": 5,
         "ps_active": False, "ps_trigger": None, "ps_lock": None,
         "ps_step_profit": None, "ps_step_lock": None,
+        "eod_exit": False,
     },
     2: _empty_rm(),
 }
@@ -160,6 +161,7 @@ def _build_context() -> dict:
             "pnl_pct": (pnl / cost * 100) if cost else 0.0,
             "rm": rm,
             "rm_enabled": rm_enabled,
+            "fired": get_basket_state(bid).get("fired", False),
         })
 
     active_baskets = [b for b in baskets if b["positions"]]
@@ -242,6 +244,12 @@ async def save_ps(basket_id: int, request: Request):
     rm["ps_step_profit"] = float(form["step_profit"]) if form.get("step_profit") else None
     rm["ps_step_lock"]   = float(form["step_lock"])   if form.get("step_lock")   else None
     reset_basket(basket_id)
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.post("/baskets/{basket_id}/rearm")
+async def rearm(basket_id: int):
+    rearm_basket(basket_id)
     return RedirectResponse(url="/", status_code=302)
 
 

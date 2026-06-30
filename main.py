@@ -11,11 +11,11 @@ from database import init_db
 from auth.routes import router as auth_router
 from auth.token_store import load_token, load_user_id
 from baskets.routes import router as baskets_router
-from baskets.service import list_baskets, get_assigned_positions, get_rm
+from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type
 from kite.positions import fetch_positions
 from kite import ticker
 from kite.orders import place_exit_orders
-from rm.engine import run_engine, reset_basket
+from rm.engine import run_engine, reset_basket, get_basket_state
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,13 +27,9 @@ def _get_baskets_for_engine() -> list[dict]:
     return _basket_cache
 
 
-def _exit_fn(basket_id: int, positions: list, reason: str):
-    # Find order_type for this basket
-    order_type = next(
-        (b.get("order_type", "LIMIT") for b in _basket_cache if b["id"] == basket_id),
-        "LIMIT"
-    )
-    asyncio.create_task(place_exit_orders(basket_id, positions, reason, order_type))
+async def _exit_fn(basket_id: int, positions: list, reason: str):
+    order_type = await asyncio.to_thread(get_order_type, basket_id)
+    await place_exit_orders(basket_id, positions, reason, order_type)
 
 
 @asynccontextmanager
@@ -119,6 +115,7 @@ async def index(request: Request):
             b["rm"].get("pt_active") or b["rm"].get("lg_active") or
             b["rm"].get("ps_active") or b["rm"].get("eod_exit")
         )
+        b["fired"] = get_basket_state(b["id"]).get("fired", False)
 
     # Update engine cache with fully-built basket context
     _basket_cache = baskets

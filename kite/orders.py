@@ -12,8 +12,8 @@ from kite.positions import fetch_positions
 
 logger = logging.getLogger(__name__)
 
-LIMIT_CHECK_INTERVAL = 5   # seconds between limit order fill checks
-MAX_LIMIT_ATTEMPTS   = 20  # give up after 20 retries (~100 seconds)
+LIMIT_CHECK_INTERVAL = 5  # seconds between limit order fill checks
+MAX_LIMIT_ATTEMPTS   = 6  # give up after 6 retries (~30 s); engine retries on next tick
 
 
 def _exit_side(quantity: int) -> str:
@@ -41,13 +41,20 @@ async def _get_best_price(kite, tradingsymbol: str, exchange: str, side: str) ->
         return None
 
 
-async def _live_qty(tradingsymbol: str, exchange: str, product: str) -> int:
-    """
-    Fetch current open quantity from Kite (pre-exit verification).
-    Raises on fetch failure so callers can distinguish 'closed' from 'error'.
-    """
+async def _fetch_live_positions() -> list:
+    """Fetch Kite positions once, with one retry on empty list (transient blip guard)."""
     positions = await asyncio.to_thread(fetch_positions)
-    for p in positions:
+    if not positions:
+        await asyncio.sleep(2)
+        positions = await asyncio.to_thread(fetch_positions)
+        if not positions:
+            logger.warning("fetch_positions still empty after retry — treating account as flat")
+    return positions or []
+
+
+def _lookup_qty(live_positions: list, tradingsymbol: str, exchange: str, product: str) -> int:
+    """Find current open quantity for a symbol in a pre-fetched positions list."""
+    for p in live_positions:
         if (p["tradingsymbol"] == tradingsymbol and
                 p["exchange"] == exchange and
                 p["product"] == product):
@@ -84,33 +91,38 @@ async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, 
     kite = get_kite()
     logger.info(f"Basket {basket_id}: EXIT triggered — {reason} | order_type={order_type}")
 
-    tasks = [
-        _exit_one(kite, p, order_type, basket_id)
-        for p in positions
-    ]
-    await asyncio.gather(*tasks)
+    live_positions = await _fetch_live_positions()
+
+    tasks = [_exit_one(kite, p, order_type, basket_id, live_positions) for p in positions]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Re-raise CancelledError immediately so app shutdown is not swallowed.
+    for r in results:
+        if isinstance(r, asyncio.CancelledError):
+            raise r
+    errors = [r for r in results if isinstance(r, Exception)]
+    if errors:
+        # Raise so _fire does not mark this basket as fired — engine will retry
+        raise RuntimeError(
+            f"Basket {basket_id}: {len(errors)}/{len(tasks)} exit(s) failed: {errors[0]}"
+        )
     logger.info(f"Basket {basket_id}: all exit orders processed.")
 
 
-async def _exit_one(kite, position: dict, order_type: str, basket_id: int):
+async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_positions: list):
     sym      = position["tradingsymbol"]
     exchange = position["exchange"]
     product  = position["product"]
-    side     = _exit_side(position["quantity"])
 
-    # Pre-exit verification — confirm position is still open in Kite.
-    # Let fetch errors propagate so we don't silently skip real positions.
-    try:
-        live_qty = await _live_qty(sym, exchange, product)
-    except Exception as e:
-        logger.error(f"Basket {basket_id}: failed to verify qty for {sym}, aborting exit: {e}")
-        return
+    # Derive side from the live quantity fetched once before the gather.
+    # A position that reversed direction since the page loaded still exits correctly.
+    live_qty = _lookup_qty(live_positions, sym, exchange, product)
 
     if live_qty == 0:
-        logger.info(f"Basket {basket_id}: {sym} already closed in Kite, skipping.")
+        logger.info(f"Basket {basket_id}: {sym} qty=0 in live positions — already closed or API mismatch, skipping.")
         return
 
-    qty = abs(live_qty)
+    qty  = abs(live_qty)
+    side = _exit_side(live_qty)
     logger.info(f"Basket {basket_id}: exiting {sym} | side={side} qty={qty} type={order_type}")
 
     if order_type == "MARKET":
@@ -134,6 +146,7 @@ async def _place_market(kite, sym, exchange, product, side, qty, basket_id):
         logger.info(f"Basket {basket_id}: MARKET order placed for {sym} | order_id={order_id}")
     except Exception as e:
         logger.error(f"Basket {basket_id}: MARKET order failed for {sym}: {e}")
+        raise
 
 
 async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, basket_id):
@@ -181,27 +194,60 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
             remaining_qty = 0
 
         elif status in ("OPEN", "TRIGGER PENDING"):
-            # Cancel and only reduce remaining_qty if cancel succeeds.
-            # If cancel fails, keep original remaining_qty to retry the full unfilled amount.
-            unfilled = remaining_qty - filled_qty
+            # Attempt cancel, then always re-fetch final status.
+            # The order may have filled between our status check and the cancel call —
+            # re-fetching after cancel gives the true final filled qty regardless.
             try:
                 await asyncio.to_thread(
                     kite.cancel_order,
                     variety=kite.VARIETY_REGULAR,
                     order_id=order_id,
                 )
-                logger.info(f"Basket {basket_id}: cancelled {order_id}, unfilled={unfilled}, retrying...")
-                remaining_qty = unfilled
             except Exception as e:
-                logger.error(f"Basket {basket_id}: cancel failed for {order_id}: {e}")
-                # Don't update remaining_qty — the original order may still be live.
+                logger.warning(f"Basket {basket_id}: cancel attempt for {order_id} raised: {e} — re-fetching status anyway")
+            # Always re-fetch after cancel (or failed cancel) to get true filled qty.
+            final_status, final_filled = await _get_order_status(kite, order_id)
+            if final_status == "UNKNOWN":
+                raise RuntimeError(
+                    f"Basket {basket_id}: {sym} order {order_id} status unknown after cancel "
+                    f"— aborting to prevent double-exit. Engine will retry on next tick."
+                )
+            unfilled = remaining_qty - final_filled
+            if unfilled < 0:
+                logger.critical(
+                    f"Basket {basket_id}: {sym} OVERFILL detected — asked {remaining_qty}, "
+                    f"got {final_filled}. Position may be over-exited. Manual review required."
+                )
+                remaining_qty = 0
+            else:
+                remaining_qty = unfilled
+            logger.info(f"Basket {basket_id}: post-cancel status={final_status} "
+                        f"final_filled={final_filled} unfilled={remaining_qty}, retrying...")
 
         elif status in ("REJECTED", "CANCELLED"):
-            logger.warning(f"Basket {basket_id}: order {order_id} {status}, retrying...")
+            # Account for any partial fill before the rejection/cancellation.
+            remaining_qty = max(0, remaining_qty - filled_qty)
+            logger.warning(f"Basket {basket_id}: order {order_id} {status} (filled={filled_qty}), remaining={remaining_qty}, retrying...")
 
         else:
-            logger.warning(f"Basket {basket_id}: unexpected status {status} for {order_id}")
+            # UNKNOWN = order status fetch failed. Attempt a best-effort cancel to
+            # prevent the original order from filling after we place a new one, then
+            # abort this position — do NOT loop back and place another order, as that
+            # risks a double-exit if the original was actually COMPLETE.
+            logger.warning(f"Basket {basket_id}: unknown status for {order_id}, attempting cancel then aborting...")
+            try:
+                await asyncio.to_thread(
+                    kite.cancel_order, variety=kite.VARIETY_REGULAR, order_id=order_id
+                )
+            except Exception:
+                pass  # Best-effort — order may already be filled or not exist
+            raise RuntimeError(
+                f"Basket {basket_id}: {sym} order {order_id} status unknown at attempt {attempt} "
+                f"— aborting to prevent double-exit. Engine will retry on next tick."
+            )
 
     if remaining_qty > 0:
-        logger.error(f"Basket {basket_id}: {sym} still has {remaining_qty} unfilled after "
-                     f"{attempt} attempts. Manual intervention required.")
+        raise RuntimeError(
+            f"Basket {basket_id}: {sym} still has {remaining_qty} unfilled after "
+            f"{attempt} attempts — engine will retry on next tick."
+        )

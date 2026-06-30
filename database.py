@@ -5,11 +5,13 @@ from config import DB_FILE
 def get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=3000")
     return conn
 
 
 def init_db():
     with get_conn() as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
         # Safe migrations for existing DBs
         for migration in [
             "ALTER TABLE basket_rm ADD COLUMN eod_exit INTEGER DEFAULT 0",

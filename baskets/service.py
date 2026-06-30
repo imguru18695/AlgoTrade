@@ -24,6 +24,14 @@ def create_basket(name: str) -> dict:
     return {"id": basket_id, "name": name, "order_type": "LIMIT"}
 
 
+def get_order_type(basket_id: int) -> str:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT order_type FROM baskets WHERE id=?", (basket_id,)
+        ).fetchone()
+    return (row["order_type"] or "LIMIT") if row else "LIMIT"
+
+
 def save_order_type(basket_id: int, order_type: str):
     with get_conn() as conn:
         conn.execute(

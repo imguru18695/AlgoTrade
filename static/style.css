@@ -450,6 +450,7 @@ main {
 
 .rm-on  { background: rgba(0,208,132,0.12); color: var(--profit); border: 1px solid rgba(0,208,132,0.2); }
 .rm-off { background: rgba(255,255,255,0.04); color: var(--text-3); border: 1px solid var(--border); }
+.badge-fired { background: rgba(255,77,106,0.12); color: var(--loss); border: 1px solid rgba(255,77,106,0.3); font-weight: 600; }
 
 /* ── P&L column — fixed width to fit ₹-99,999 + -100.00% ────── */
 .col-pnl {
