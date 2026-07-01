@@ -35,9 +35,10 @@ async def save_profit_target(
     basket_id: int,
     active: Optional[str] = Form(default=None),
     inr: Optional[float] = Form(default=None),
-    ticks: Optional[int] = Form(default=None),
+    ticks: Optional[str] = Form(default=None),
 ):
-    service.save_rm_profit_target(basket_id, active == "1", inr, ticks)
+    ticks_int = int(ticks) if ticks and ticks.strip() else None
+    service.save_rm_profit_target(basket_id, active == "1", inr, ticks_int)
     reset_basket(basket_id)
     return RedirectResponse(url="/", status_code=302)
 
@@ -47,9 +48,10 @@ async def save_loss_guard(
     basket_id: int,
     active: Optional[str] = Form(default=None),
     inr: Optional[float] = Form(default=None),
-    ticks: Optional[int] = Form(default=None),
+    ticks: Optional[str] = Form(default=None),
 ):
-    service.save_rm_loss_guard(basket_id, active == "1", inr, ticks)
+    ticks_int = int(ticks) if ticks and ticks.strip() else None
+    service.save_rm_loss_guard(basket_id, active == "1", inr, ticks_int)
     reset_basket(basket_id)
     return RedirectResponse(url="/", status_code=302)
 
