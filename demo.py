@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 _exit_log: list[dict] = []
 
 
-async def _demo_exit(basket_id: int, positions: list, reason: str):
+async def _demo_exit(basket_id: int, positions: list, reason: str, event_id: int | None = None):
     entry = {"basket_id": basket_id, "reason": reason,
              "symbols": [p["tradingsymbol"] for p in positions]}
     _exit_log.append(entry)

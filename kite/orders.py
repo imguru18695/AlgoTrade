@@ -77,7 +77,7 @@ async def _get_order_status(kite, order_id: str) -> tuple[str, int]:
     return "UNKNOWN", 0
 
 
-async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, order_type: str = "LIMIT"):
+async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, order_type: str = "LIMIT", event_id: int | None = None):
     """
     Place exit orders for all open positions in a basket.
     Called by the RM engine when a rule triggers.
@@ -93,7 +93,7 @@ async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, 
 
     live_positions = await _fetch_live_positions()
 
-    tasks = [_exit_one(kite, p, order_type, basket_id, live_positions) for p in positions]
+    tasks = [_exit_one(kite, p, order_type, basket_id, live_positions, event_id) for p in positions]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     # Re-raise CancelledError immediately so app shutdown is not swallowed.
     for r in results:
@@ -108,7 +108,7 @@ async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, 
     logger.info(f"Basket {basket_id}: all exit orders processed.")
 
 
-async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_positions: list):
+async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_positions: list, event_id: int | None = None):
     sym      = position["tradingsymbol"]
     exchange = position["exchange"]
     product  = position["product"]
@@ -126,12 +126,12 @@ async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_
     logger.info(f"Basket {basket_id}: exiting {sym} | side={side} qty={qty} type={order_type}")
 
     if order_type == "MARKET":
-        await _place_market(kite, sym, exchange, product, side, qty, basket_id)
+        await _place_market(kite, sym, exchange, product, side, qty, basket_id, event_id)
     else:
-        await _place_limit_with_retry(kite, sym, exchange, product, side, qty, basket_id)
+        await _place_limit_with_retry(kite, sym, exchange, product, side, qty, basket_id, event_id)
 
 
-async def _place_market(kite, sym, exchange, product, side, qty, basket_id):
+async def _place_market(kite, sym, exchange, product, side, qty, basket_id, event_id=None):
     try:
         order_id = await asyncio.to_thread(
             kite.place_order,
@@ -144,17 +144,33 @@ async def _place_market(kite, sym, exchange, product, side, qty, basket_id):
             order_type=kite.ORDER_TYPE_MARKET,
         )
         logger.info(f"Basket {basket_id}: MARKET order placed for {sym} | order_id={order_id}")
+        if event_id is not None:
+            from logs.service import log_exit_order
+            await asyncio.to_thread(
+                log_exit_order, event_id, sym, exchange, product,
+                side, qty, None, str(order_id), None, "PLACED", 1,
+            )
     except Exception as e:
         logger.error(f"Basket {basket_id}: MARKET order failed for {sym}: {e}")
         raise
 
 
-async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, basket_id):
+async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, basket_id, event_id=None):
+    from logs.service import log_exit_order
+
+    async def _log(placed_qty, price, oid, filled, status, att):
+        if event_id is not None:
+            await asyncio.to_thread(
+                log_exit_order, event_id, sym, exchange, product,
+                side, placed_qty, price, oid, filled, status, att,
+            )
+
     remaining_qty = qty
     attempt = 0
 
     while remaining_qty > 0 and attempt < MAX_LIMIT_ATTEMPTS:
         attempt += 1
+        placed_this_attempt = remaining_qty
 
         # Fetch fresh best bid/ask
         price = await _get_best_price(kite, sym, exchange, side)
@@ -191,6 +207,7 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
 
         if status == "COMPLETE":
             logger.info(f"Basket {basket_id}: {sym} fully filled.")
+            await _log(placed_this_attempt, price, str(order_id), filled_qty, "COMPLETE", attempt)
             remaining_qty = 0
 
         elif status in ("OPEN", "TRIGGER PENDING"):
@@ -208,6 +225,7 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
             # Always re-fetch after cancel (or failed cancel) to get true filled qty.
             final_status, final_filled = await _get_order_status(kite, order_id)
             if final_status == "UNKNOWN":
+                await _log(placed_this_attempt, price, str(order_id), final_filled, "UNKNOWN", attempt)
                 raise RuntimeError(
                     f"Basket {basket_id}: {sym} order {order_id} status unknown after cancel "
                     f"— aborting to prevent double-exit. Engine will retry on next tick."
@@ -221,12 +239,14 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
                 remaining_qty = 0
             else:
                 remaining_qty = unfilled
+            await _log(placed_this_attempt, price, str(order_id), final_filled, final_status, attempt)
             logger.info(f"Basket {basket_id}: post-cancel status={final_status} "
                         f"final_filled={final_filled} unfilled={remaining_qty}, retrying...")
 
         elif status in ("REJECTED", "CANCELLED"):
             # Account for any partial fill before the rejection/cancellation.
             remaining_qty = max(0, remaining_qty - filled_qty)
+            await _log(placed_this_attempt, price, str(order_id), filled_qty, status, attempt)
             logger.warning(f"Basket {basket_id}: order {order_id} {status} (filled={filled_qty}), remaining={remaining_qty}, retrying...")
 
         else:
@@ -241,6 +261,7 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
                 )
             except Exception:
                 pass  # Best-effort — order may already be filled or not exist
+            await _log(placed_this_attempt, price, str(order_id), 0, "UNKNOWN", attempt)
             raise RuntimeError(
                 f"Basket {basket_id}: {sym} order {order_id} status unknown at attempt {attempt} "
                 f"— aborting to prevent double-exit. Engine will retry on next tick."

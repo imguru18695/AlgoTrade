@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ── Logs page ─────────────────────────────────────────────────── */
+.logs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+}
+.logs-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+}
+.filter-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+}
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.filter-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.filter-group select,
+.filter-group input[type="date"] {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 7px 10px;
+    min-width: 160px;
+}
+.filter-group select:focus,
+.filter-group input[type="date"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.btn-search {
+    background: var(--accent-grad);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    align-self: flex-end;
+}
+.btn-search:hover { opacity: 0.88; }
+
+/* ── Results ───────────────────────────────────────────────────── */
+.results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.results-count {
+    font-size: 12px;
+    color: var(--text-2);
+}
+.btn-clear {
+    background: rgba(255,77,106,0.1);
+    color: var(--loss);
+    border: 1px solid rgba(255,77,106,0.25);
+    border-radius: var(--radius-sm);
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+.btn-clear:hover { background: rgba(255,77,106,0.18); }
+
+/* ── Event card ────────────────────────────────────────────────── */
+.event-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+.event-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+.event-basket {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.event-reason {
+    font-size: 12px;
+    color: var(--warn);
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.event-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.event-meta-item {
+    font-size: 11px;
+    color: var(--text-2);
+}
+.event-meta-item span {
+    color: var(--text);
+    font-weight: 500;
+}
+.badge-ot {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+/* ── RM snapshot ───────────────────────────────────────────────── */
+.rm-snapshot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    background: rgba(0,0,0,0.15);
+    border-bottom: 1px solid var(--border);
+}
+.rm-chip {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+}
+.rm-chip span { color: var(--text); font-weight: 600; }
+
+/* ── Orders table ──────────────────────────────────────────────── */
+.orders-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+.orders-table th {
+    padding: 9px 16px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: rgba(0,0,0,0.15);
+    border-bottom: 1px solid var(--border);
+}
+.orders-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+.orders-table tr:last-child td { border-bottom: none; }
+.orders-table tr:hover td { background: var(--surface-hov); }
+.orders-table td.sym { color: var(--text); font-weight: 600; }
+.side-buy  { color: var(--profit); font-weight: 600; }
+.side-sell { color: var(--loss);   font-weight: 600; }
+.status-complete { color: var(--profit); font-weight: 600; }
+.status-placed   { color: var(--accent); font-weight: 600; }
+.status-rejected, .status-unknown    { color: var(--loss);   font-weight: 600; }
+.status-cancelled { color: var(--warn);  font-weight: 600; }
+.status-open     { color: var(--text-2); font-weight: 600; }
+.attempt-badge {
+    display: inline-block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1px 7px;
+    font-size: 10.5px;
+    color: var(--text-3);
+}
+
+/* ── Empty state ───────────────────────────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-3);
+}
+.empty-state p { margin-top: 8px; font-size: 13px; }
+</style>
+
+<div class="logs-header">
+    <span class="logs-title">Exit Logs</span>
+    <a href="/" class="btn-ghost" style="font-size:13px;">← Back to Dashboard</a>
+</div>
+
+<!-- Filter bar -->
+<form method="get" action="/logs">
+    <div class="filter-bar">
+        <div class="filter-group">
+            <label>Basket</label>
+            <select name="basket_name">
+                <option value="">All Baskets</option>
+                {% for name in basket_names %}
+                <option value="{{ name }}" {% if basket_name == name %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>From Date</label>
+            <input type="date" name="from_date" value="{{ from_date }}">
+        </div>
+        <div class="filter-group">
+            <label>To Date</label>
+            <input type="date" name="to_date" value="{{ to_date }}">
+        </div>
+        <button type="submit" class="btn-search">Search</button>
+    </div>
+</form>
+
+<!-- Results -->
+{% if events %}
+<div class="results-header">
+    <span class="results-count">{{ events|length }} exit event{{ 's' if events|length != 1 else '' }} found</span>
+    <button type="button" class="btn-clear"
+        onclick="document.getElementById('clear-form').submit()"
+        onmousedown="return confirmClear()">
+        Clear Shown Results
+    </button>
+</div>
+
+<!-- Hidden clear form — submits all visible event IDs -->
+<form id="clear-form" method="post" action="/logs/clear">
+    <input type="hidden" name="basket_name" value="{{ basket_name }}">
+    <input type="hidden" name="from_date"   value="{{ from_date }}">
+    <input type="hidden" name="to_date"     value="{{ to_date }}">
+    {% for ev in events %}
+    <input type="hidden" name="event_id" value="{{ ev.id }}">
+    {% endfor %}
+</form>
+
+{% for ev in events %}
+{% set rm = ev.rm_snapshot %}
+<div class="event-card">
+
+    <!-- Event header -->
+    <div class="event-header">
+        <div>
+            <div class="event-basket">{{ ev.basket_name }}</div>
+            <div class="event-reason">{{ ev.trigger_reason }}</div>
+            <div class="event-meta">
+                <div class="event-meta-item">Triggered at <span>{{ ev.triggered_at[:19].replace('T',' ') }} IST</span></div>
+                <div class="event-meta-item">Basket ID <span>#{{ ev.basket_id }}</span></div>
+            </div>
+        </div>
+        <div>
+            <span class="badge-ot">{{ ev.order_type }}</span>
+        </div>
+    </div>
+
+    <!-- RM snapshot -->
+    <div class="rm-snapshot">
+        {% if rm.get('pt_active') %}
+        <span class="rm-chip">PT <span>₹{{ "{:,.0f}".format(rm.pt_inr) }}</span>
+            {% if rm.get('pt_ticks') %} · <span>{{ rm.pt_ticks }} ticks</span>{% endif %}
+        </span>
+        {% endif %}
+        {% if rm.get('lg_active') %}
+        <span class="rm-chip">LG <span>₹{{ "{:,.0f}".format(rm.lg_inr) }}</span>
+            {% if rm.get('lg_ticks') %} · <span>{{ rm.lg_ticks }} ticks</span>{% endif %}
+        </span>
+        {% endif %}
+        {% if rm.get('ps_active') %}
+        <span class="rm-chip">PS trigger <span>₹{{ "{:,.0f}".format(rm.ps_trigger) }}</span>
+            · lock <span>₹{{ "{:,.0f}".format(rm.ps_lock) }}</span>
+            {% if rm.get('ps_step_profit') %}· step ₹{{ "{:,.0f}".format(rm.ps_step_profit) }}/₹{{ "{:,.0f}".format(rm.ps_step_lock) }}{% endif %}
+        </span>
+        {% endif %}
+        {% if rm.get('eod_exit') %}
+        <span class="rm-chip">EOD Exit <span>enabled</span></span>
+        {% endif %}
+        {% if not rm.get('pt_active') and not rm.get('lg_active') and not rm.get('ps_active') and not rm.get('eod_exit') %}
+        <span class="rm-chip" style="color:var(--text-3)">No RM config at fire time</span>
+        {% endif %}
+    </div>
+
+    <!-- Per-leg orders table -->
+    {% if ev.orders %}
+    <table class="orders-table">
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>Exchange</th>
+                <th>Product</th>
+                <th>Side</th>
+                <th>Qty Placed</th>
+                <th>Limit Price</th>
+                <th>Order ID</th>
+                <th>Filled Qty</th>
+                <th>Status</th>
+                <th>Attempt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in ev.orders %}
+            <tr>
+                <td class="sym">{{ o.tradingsymbol }}</td>
+                <td>{{ o.exchange }}</td>
+                <td>{{ o.product }}</td>
+                <td class="{{ 'side-buy' if o.side == 'BUY' else 'side-sell' }}">{{ o.side }}</td>
+                <td>{{ o.qty_placed }}</td>
+                <td>{% if o.limit_price %}₹{{ "{:,.2f}".format(o.limit_price) }}{% else %}<span style="color:var(--text-3)">Market</span>{% endif %}</td>
+                <td style="font-size:11px;color:var(--text-3)">{{ o.order_id or '—' }}</td>
+                <td>{{ o.filled_qty if o.filled_qty is not none else '—' }}</td>
+                <td class="status-{{ o.status|lower|replace(' ','') if o.status else 'unknown' }}">{{ o.status or '—' }}</td>
+                <td><span class="attempt-badge">#{{ o.attempt }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding:14px 20px;font-size:12px;color:var(--text-3);">No order records for this event.</div>
+    {% endif %}
+
+</div>
+{% endfor %}
+
+{% else %}
+<div class="empty-state">
+    <div style="font-size:32px;">📋</div>
+    <p>No exit events found for the selected filters.</p>
+</div>
+{% endif %}
+
+<script>
+function confirmClear() {
+    const n = {{ events|length }};
+    return confirm(`Clear ${n} exit event${n !== 1 ? 's' : ''} from the log? This cannot be undone.`);
+}
+// If confirm returns false, prevent the form from submitting
+document.getElementById('clear-form') && document.querySelector('.btn-clear').addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    if (confirmClear()) document.getElementById('clear-form').submit();
+});
+</script>
+{% endblock %}

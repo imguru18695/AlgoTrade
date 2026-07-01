@@ -17,7 +17,7 @@ IST            = timezone(timedelta(hours=5, minutes=30))
 MARKET_OPEN    = (9, 15)
 MARKET_CLOSE   = (15, 29)  # stop ticks at 15:29 — NSE rejects orders at/after 15:30
 EOD_EXIT_TIME  = (15, 25)
-CHECK_INTERVAL = 5  # seconds
+CHECK_INTERVAL = 1  # seconds
 
 # Per-basket intraday state — auto-resets each new trading day
 # basket_id → {date, floor, fired, pt_checks, lg_checks}
@@ -140,7 +140,7 @@ async def _check_basket(
 
     # ── EOD auto-exit ────────────────────────────────────────────────
     if rm.get("eod_exit") and _past_eod_time():
-        await _fire(exit_fn, bid, positions, "EOD auto-exit at 3:25 PM")
+        await _fire(exit_fn, bid, positions, "EOD auto-exit at 3:25 PM", basket)
         return
 
     # ── Profit Target (takes priority over Profit Shield) ────────────
@@ -151,7 +151,7 @@ async def _check_basket(
             logger.info(f"Basket {bid}: PT check {state['pt_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["pt_checks"] >= needed:
                 await _fire(exit_fn, bid, positions,
-                      f"Profit Target ₹{rm['pt_inr']:,.0f} hit")
+                      f"Profit Target ₹{rm['pt_inr']:,.0f} hit", basket)
                 return
         else:
             if state["pt_checks"] > 0:
@@ -166,7 +166,7 @@ async def _check_basket(
             logger.info(f"Basket {bid}: LG check {state['lg_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["lg_checks"] >= needed:
                 await _fire(exit_fn, bid, positions,
-                      f"Loss Guard -₹{rm['lg_inr']:,.0f} breached")
+                      f"Loss Guard -₹{rm['lg_inr']:,.0f} breached", basket)
                 return
         else:
             if state["lg_checks"] > 0:
@@ -194,7 +194,7 @@ async def _check_basket(
 
         if state["floor"] is not None and pnl < state["floor"]:
             await _fire(exit_fn, bid, positions,
-                  f"Profit Shield floor ₹{state['floor']:,.0f} breached")
+                  f"Profit Shield floor ₹{state['floor']:,.0f} breached", basket)
             return
 
 
@@ -243,10 +243,26 @@ async def run_engine(
                 logger.error(f"RM engine: unhandled error in basket check: {r}")
 
 
-async def _fire(exit_fn, basket_id, positions, reason):
+async def _fire(exit_fn, basket_id, positions, reason, basket):
     logger.info(f"Basket {basket_id}: FIRING EXIT — {reason}")
+    # Create the exit event log record before placing orders so we have an event_id
+    # to associate with each order attempt.
     try:
-        await exit_fn(basket_id, positions, reason)
+        from logs.service import create_exit_event
+        basket_name = basket.get("name", f"Basket {basket_id}")
+        rm_snapshot = basket.get("rm") or {}
+        order_type  = basket.get("order_type", "LIMIT")
+        triggered_at = datetime.now(IST).isoformat()
+        event_id = await asyncio.to_thread(
+            create_exit_event,
+            basket_id, basket_name, triggered_at, reason, order_type, rm_snapshot,
+        )
+    except Exception as e:
+        logger.error(f"Basket {basket_id}: failed to create exit event log: {e}")
+        event_id = None
+
+    try:
+        await exit_fn(basket_id, positions, reason, event_id)
     except asyncio.CancelledError:
         raise  # Let task cancellation (app shutdown) propagate cleanly
     except Exception as e:

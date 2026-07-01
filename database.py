@@ -23,7 +23,42 @@ def init_db():
             except Exception:
                 pass
 
+        # Safe migrations for log tables
+        for migration in [
+            "ALTER TABLE exit_events ADD COLUMN order_type TEXT DEFAULT 'LIMIT'",
+        ]:
+            try:
+                conn.execute(migration)
+                conn.commit()
+            except Exception:
+                pass
+
         conn.executescript("""
+            CREATE TABLE IF NOT EXISTS exit_events (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                basket_id       INTEGER NOT NULL,
+                basket_name     TEXT NOT NULL,
+                triggered_at    TEXT NOT NULL,
+                trigger_reason  TEXT NOT NULL,
+                order_type      TEXT NOT NULL DEFAULT 'LIMIT',
+                rm_snapshot     TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS exit_orders (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id        INTEGER NOT NULL REFERENCES exit_events(id) ON DELETE CASCADE,
+                tradingsymbol   TEXT NOT NULL,
+                exchange        TEXT NOT NULL,
+                product         TEXT NOT NULL,
+                side            TEXT NOT NULL,
+                qty_placed      INTEGER NOT NULL,
+                limit_price     REAL,
+                order_id        TEXT,
+                filled_qty      INTEGER,
+                status          TEXT,
+                attempt         INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS baskets (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 name        TEXT NOT NULL,
@@ -61,3 +96,4 @@ def init_db():
                 eod_exit        INTEGER DEFAULT 0
             );
         """)
+        conn.commit()

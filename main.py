@@ -11,6 +11,7 @@ from database import init_db
 from auth.routes import router as auth_router
 from auth.token_store import load_token, load_user_id
 from baskets.routes import router as baskets_router
+from logs.routes import router as logs_router
 from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type
 from kite.positions import fetch_positions
 from kite import ticker
@@ -27,9 +28,9 @@ def _get_baskets_for_engine() -> list[dict]:
     return _basket_cache
 
 
-async def _exit_fn(basket_id: int, positions: list, reason: str):
+async def _exit_fn(basket_id: int, positions: list, reason: str, event_id: int | None = None):
     order_type = await asyncio.to_thread(get_order_type, basket_id)
-    await place_exit_orders(basket_id, positions, reason, order_type)
+    await place_exit_orders(basket_id, positions, reason, order_type, event_id)
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(baskets_router)
+app.include_router(logs_router)
 
 templates = Jinja2Templates(directory="templates")
 
