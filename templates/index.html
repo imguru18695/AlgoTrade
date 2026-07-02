@@ -13,8 +13,8 @@
         </span>
         <span class="kpi-label">No RM Setup</span>
     </div>
-    <div class="kpi {% if total_pnl < 0 %}kpi-loss{% else %}kpi-profit{% endif %}">
-        <span class="kpi-value">{{ "₹{:,.0f}".format(total_pnl) }}</span>
+    <div class="kpi {% if total_pnl < 0 %}kpi-loss{% else %}kpi-profit{% endif %}" id="kpi-total-pnl-card">
+        <span class="kpi-value" id="kpi-total-pnl">{{ "₹{:,.0f}".format(total_pnl) }}</span>
         <span class="kpi-label">Total MTM P&L</span>
     </div>
     <div class="kpi">
@@ -50,7 +50,7 @@
         </thead>
         <tbody id="unalloc-tbody">
         {% for p in unallocated %}
-        <tr>
+        <tr data-pos-key="{{ p.tradingsymbol }}|{{ p.exchange }}|{{ p.product }}">
             <td class="col-check">
                 <input type="checkbox" class="unalloc-check"
                        data-symbol="{{ p.tradingsymbol }}"
@@ -65,7 +65,7 @@
                 {{ "%+d"|format(p.quantity) }}
             </td>
             <td>{{ "%.2f"|format(p.average_price) }}</td>
-            <td>{{ "%.2f"|format(p.last_price) }}</td>
+            <td class="col-ltp">{{ "%.2f"|format(p.last_price) }}</td>
             <td class="col-pnl">
                 <span class="{{ 'profit' if p.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(p.pnl) }}</span>
                 <span class="pct-badge {{ 'pct-profit' if p.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(p.pnl_pct) }}%</span>
@@ -96,7 +96,7 @@
             <span class="rm-chip {{ 'rm-on' if b.rm.get('ps_active') else 'rm-off' }}">Profit Shield</span>
             <span class="rm-chip {{ 'rm-on' if b.rm.get('eod_exit') else 'rm-off' }}">EOD Exit</span>
         </div>
-        <div class="basket-pnl">
+        <div class="basket-pnl" id="basket-pnl-{{ b.id }}">
             <span class="{{ 'profit' if b.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(b.pnl) }}</span>
             {% if b.positions %}
             <span class="pct-badge {{ 'pct-profit' if b.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(b.pnl_pct) }}%</span>
@@ -146,7 +146,7 @@
                     </thead>
                     <tbody id="basket-tbody-{{ b.id }}">
                     {% for p in b.positions %}
-                    <tr>
+                    <tr data-pos-key="{{ p.tradingsymbol }}|{{ p.exchange }}|{{ p.product }}">
                         <td class="col-check">
                             <input type="checkbox" class="basket-check-{{ b.id }}"
                                    data-symbol="{{ p.tradingsymbol }}"
@@ -159,7 +159,7 @@
                             {{ "%+d"|format(p.quantity) }}
                         </td>
                         <td>{{ "%.2f"|format(p.average_price) }}</td>
-                        <td>{{ "%.2f"|format(p.last_price) }}</td>
+                        <td class="col-ltp">{{ "%.2f"|format(p.last_price) }}</td>
                         <td class="col-pnl">
                             <span class="{{ 'profit' if p.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(p.pnl) }}</span>
                             <span class="pct-badge {{ 'pct-profit' if p.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(p.pnl_pct) }}%</span>
@@ -731,16 +731,61 @@ function submitEodToggle(basketId, enabled) {
     }
 }
 
-// ── Auto-refresh during market hours (disabled in demo) ───────
-function autoRefresh() {
-    if (window.__DEMO_MODE__) return;
+// ── Live P&L polling (no flash) ───────────────────────────────
+function istNow() {
     const now = new Date();
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const ist = new Date(utc + 5.5 * 3600000);
-    const h = ist.getHours(), m = ist.getMinutes();
-    const inMarket = (h > 9 || (h === 9 && m >= 15)) && h < 15;
-    if (inMarket) setTimeout(() => location.reload(), 30000);
+    return new Date(utc + 5.5 * 3600000);
 }
-autoRefresh();
+function isMarketHours() {
+    const ist = istNow();
+    const h = ist.getHours(), m = ist.getMinutes();
+    return (h > 9 || (h === 9 && m >= 15)) && (h < 15 || (h === 15 && m < 30));
+}
+function fmtINR(v) {
+    return '₹' + Math.round(v).toLocaleString('en-IN');
+}
+function fmtPct(v) {
+    return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+function updatePnl(data) {
+    // KPI total
+    const kpiCard = document.getElementById('kpi-total-pnl-card');
+    const kpiVal  = document.getElementById('kpi-total-pnl');
+    if (kpiVal) {
+        kpiVal.textContent = fmtINR(data.total_pnl);
+        kpiCard.className  = 'kpi ' + (data.total_pnl < 0 ? 'kpi-loss' : 'kpi-profit');
+    }
+    // Position rows (both unallocated and basket tables share the same key)
+    for (const [key, pos] of Object.entries(data.positions)) {
+        document.querySelectorAll(`tr[data-pos-key="${key}"]`).forEach(row => {
+            const ltpCell = row.querySelector('.col-ltp');
+            const pnlCell = row.querySelector('.col-pnl');
+            if (ltpCell) ltpCell.textContent = pos.ltp.toFixed(2);
+            if (pnlCell) {
+                const s  = pos.pnl     >= 0 ? 'profit'     : 'loss';
+                const ps = pos.pnl_pct >= 0 ? 'pct-profit' : 'pct-loss';
+                pnlCell.innerHTML = `<span class="${s}">${fmtINR(pos.pnl)}</span> <span class="pct-badge ${ps}">${fmtPct(pos.pnl_pct)}</span>`;
+            }
+        });
+    }
+    // Basket header P&L
+    for (const [id, b] of Object.entries(data.baskets)) {
+        const el = document.getElementById('basket-pnl-' + id);
+        if (!el) continue;
+        const s  = b.pnl     >= 0 ? 'profit'     : 'loss';
+        const ps = b.pnl_pct >= 0 ? 'pct-profit' : 'pct-loss';
+        el.innerHTML = `<span class="${s}">${fmtINR(b.pnl)}</span> <span class="pct-badge ${ps}">${fmtPct(b.pnl_pct)}</span>`;
+    }
+}
+async function pollPnl() {
+    if (window.__DEMO_MODE__ || !isMarketHours()) return;
+    try {
+        const resp = await fetch('/pnl');
+        if (resp.ok) updatePnl(await resp.json());
+    } catch (_) {}
+    setTimeout(pollPnl, 5000);
+}
+setTimeout(pollPnl, 5000);
 </script>
 {% endblock %}
