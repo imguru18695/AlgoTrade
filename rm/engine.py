@@ -52,6 +52,7 @@ def _fresh_state() -> dict:
     return {
         "date":      datetime.now(IST).date(),
         "floor":     None,   # Profit Shield current floor (steps up, never down)
+        "ps_armed":  False,  # True once pnl >= ps_trigger seen this day; guards overnight floor
         "fired":     False,  # True once exit orders are placed
         "pt_checks": 0,      # consecutive 5-sec checks above PT threshold
         "lg_checks": 0,      # consecutive 5-sec checks below LG threshold
@@ -190,6 +191,9 @@ async def _check_basket(
             if state["floor"] is None:
                 state["floor"] = base_lock
                 logger.info(f"Basket {bid}: PS activated, floor=₹{base_lock:,.0f}")
+            if not state["ps_armed"]:
+                state["ps_armed"] = True
+                logger.info(f"Basket {bid}: PS armed for today")
 
             if step_p > 0 and step_l > 0:
                 steps     = int((pnl - trigger) / step_p)
@@ -198,7 +202,10 @@ async def _check_basket(
                     state["floor"] = new_floor
                     logger.info(f"Basket {bid}: PS floor stepped up to ₹{new_floor:,.0f}")
 
-        if state["floor"] is not None and pnl < state["floor"]:
+        # Only fire the floor check if PS was armed this trading day.
+        # On day-2 open with an overnight preserved floor, an immediate gap-down
+        # must NOT fire — the position must re-reach ps_trigger first.
+        if state["ps_armed"] and state["floor"] is not None and pnl < state["floor"]:
             await _fire(exit_fn, bid, positions,
                   f"Profit Shield floor ₹{state['floor']:,.0f} breached", basket)
             return

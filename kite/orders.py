@@ -101,20 +101,14 @@ async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, 
             raise r
     errors = [r for r in results if isinstance(r, Exception)]
     if errors:
-        if len(errors) == len(tasks):
-            # Every leg failed — raise so _fire keeps fired=False and engine retries
-            raise RuntimeError(
-                f"Basket {basket_id}: all {len(tasks)} exits failed: {errors[0]}"
-            )
-        # Partial failure: some legs were placed, others failed.
-        # Do NOT raise — _fire will set fired=True to prevent duplicate storms.
-        # Any already-exited legs show qty=0 in Kite so the per-leg qty=0 guard
-        # in _exit_one prevents double-exits if the engine somehow retries.
-        logger.error(
+        # Raise on any failure — partial or total — so _fire keeps fired=False and
+        # the engine retries on the next tick. Legs that already exited show qty=0
+        # in live positions, so _exit_one's qty=0 guard prevents double-exits.
+        raise RuntimeError(
             f"Basket {basket_id}: {len(errors)}/{len(tasks)} exit leg(s) failed — "
-            f"fired=True will be set. Check exit logs. First error: {errors[0]}"
+            f"engine will retry on next tick. First error: {errors[0]}"
         )
-    logger.info(f"Basket {basket_id}: exit processing complete ({len(tasks) - len(errors)}/{len(tasks)} succeeded).")
+    logger.info(f"Basket {basket_id}: exit processing complete ({len(tasks)}/{len(tasks)} succeeded).")
 
 
 async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_positions: list, event_id: int | None = None):
@@ -189,6 +183,7 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
                 f"Basket {basket_id}: no depth for {sym} (check {no_depth_checks}), waiting..."
             )
             if no_depth_checks >= MAX_LIMIT_ATTEMPTS:
+                await _log(qty, None, None, 0, "NO_DEPTH", 0)
                 raise RuntimeError(
                     f"Basket {basket_id}: {sym} — no market depth after "
                     f"{no_depth_checks} checks; engine will retry on next tick."

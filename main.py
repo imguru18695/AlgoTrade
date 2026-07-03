@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -25,17 +26,31 @@ logging.basicConfig(level=logging.INFO)
 _basket_cache: list[dict] = []
 _all_positions_cache: list[dict] = []
 _unallocated_cache: list[dict] = []
+_last_refresh_ts: float = 0.0   # monotonic time of last successful _refresh_cache
 
-CACHE_REFRESH_INTERVAL = 60  # seconds between background cache refreshes
+CACHE_REFRESH_INTERVAL = 60   # seconds between background cache refreshes
+MAX_CACHE_AGE          = 180  # seconds; engine pauses if cache is older than this
+
+# Strong references to background tasks prevent GC (Python only keeps weak refs via event loop)
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _get_baskets_for_engine() -> list[dict]:
+    age = time.monotonic() - _last_refresh_ts
+    if age > MAX_CACHE_AGE:
+        logging.warning(
+            f"RM engine: basket cache is {age:.0f}s old (>{MAX_CACHE_AGE}s) — "
+            "pausing all RM checks until cache is refreshed."
+        )
+        return []
     return _basket_cache
 
 
 def _compute_pnl(p: dict) -> tuple[float, float, float]:
     """Return (ltp, pnl, pnl_pct) using live ticker LTP or quote fallback."""
-    ltp  = ticker.get_ltp(p.get("instrument_token", 0)) or p.get("last_price", 0)
+    ltp = ticker.get_ltp(p.get("instrument_token", 0))
+    if ltp is None:  # explicit None check — 0.0 is a valid circuit-halt price
+        ltp = p.get("last_price", 0)
     qty  = p["quantity"]
     avg  = p["average_price"]
     mult = p.get("multiplier", 1)
@@ -62,7 +77,7 @@ async def _refresh_cache():
     loop, and on each page load (so browser-active sessions get instant updates).
     The RM engine reads from these caches — it never depends on a page load.
     """
-    global _basket_cache, _all_positions_cache, _unallocated_cache
+    global _basket_cache, _all_positions_cache, _unallocated_cache, _last_refresh_ts
 
     try:
         positions = await asyncio.to_thread(fetch_positions)
@@ -125,6 +140,7 @@ async def _refresh_cache():
     _basket_cache        = baskets
     _all_positions_cache = positions
     _unallocated_cache   = unallocated
+    _last_refresh_ts     = time.monotonic()
 
 
 async def _refresh_loop():
@@ -152,13 +168,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.error(f"Startup cache load failed: {e}")
 
-    asyncio.create_task(_refresh_loop())
-    asyncio.create_task(run_engine(
+    def _keep(task: asyncio.Task):
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
+    _keep(asyncio.create_task(_refresh_loop()))
+    _keep(asyncio.create_task(run_engine(
         get_baskets_fn=_get_baskets_for_engine,
         ltp_fn=ticker.get_ltp,
         exit_fn=_exit_fn,
         no_ltp_fn=lambda: logging.warning("RM engine: no live prices available."),
-    ))
+    )))
     yield
     ticker.stop()
 

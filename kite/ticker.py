@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 ltp_store: dict[int, float] = {}
 
 _ticker: KiteTicker | None = None
+_ticker_token: str | None = None   # auth token used to create current _ticker
 _lock = threading.Lock()
 _subscribed_tokens: list[int] = []
 _connected: bool = False
@@ -46,6 +47,12 @@ def subscribe(instrument_tokens: list[int]):
         new_set = set(_subscribed_tokens) | set(instrument_tokens)
         _subscribed_tokens = list(new_set)
 
+        # Re-login: auth token changed — tear down the old WebSocket so the new
+        # token takes effect. stop() nulls _ticker; _create_ticker() is called below.
+        if _ticker is not None and _ticker_token != auth_token:
+            logger.info("KiteTicker: auth token changed — restarting WebSocket with new token")
+            _stop_locked()
+
         if _ticker is None:
             _create_ticker(auth_token)
         elif _connected:
@@ -57,16 +64,32 @@ def subscribe(instrument_tokens: list[int]):
                 logger.warning(f"KiteTicker: failed to update subscription: {e}")
 
 
+def _stop_locked():
+    """Stop and null the current ticker. Must be called with _lock held."""
+    global _ticker, _ticker_token, _connected
+    if _ticker:
+        try:
+            _ticker.close()
+        except Exception:
+            pass
+    _ticker = None
+    _ticker_token = None
+    _connected = False
+
+
 def _create_ticker(auth_token: str):
     """Create and connect a new KiteTicker. Must be called with _lock held."""
-    global _ticker, _connected
+    global _ticker, _ticker_token, _connected
 
     _ticker = KiteTicker(KITE_API_KEY, auth_token)
+    _ticker_token = auth_token
     _connected = False
 
     def on_ticks(ws, ticks):
         for tick in ticks:
-            ltp_store[tick["instrument_token"]] = tick.get("last_price", 0)
+            lp = tick.get("last_price")
+            if lp is not None:  # never store 0 as a sentinel for "no data"
+                ltp_store[tick["instrument_token"]] = lp
 
     def on_connect(ws, response):
         global _connected
@@ -125,17 +148,14 @@ def seed_ltp(positions: list[dict], kite) -> None:
         quotes = kite.quote(list(token_map.keys()))
         for key, data in quotes.items():
             token = token_map.get(key)
-            if token and data.get("last_price"):
-                ltp_store[token] = data["last_price"]
+            lp = data.get("last_price")
+            if token and lp is not None:  # 0.0 is valid (circuit-halted)
+                ltp_store[token] = lp
         logger.info(f"LTP seeded for {len(token_map)} token(s) via quote API")
     except Exception as e:
         logger.warning(f"LTP seeding via quote() failed: {e}")
 
 
 def stop():
-    global _ticker, _connected
     with _lock:
-        if _ticker:
-            _ticker.close()
-            _ticker = None
-            _connected = False
+        _stop_locked()

@@ -2,16 +2,14 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from kiteconnect import KiteConnect
 from config import KITE_API_KEY, KITE_API_SECRET, REDIRECT_URL
-from auth.token_store import save_token, clear_token
+from auth.token_store import save_token
 from kite.client import reset_kite
 
 router = APIRouter(prefix="/auth")
 
 
 def _kite() -> KiteConnect:
-    kite = KiteConnect(api_key=KITE_API_KEY)
-    kite.set_session_expiry_hook(clear_token)
-    return kite
+    return KiteConnect(api_key=KITE_API_KEY)
 
 
 @router.get("/login", response_class=HTMLResponse)
