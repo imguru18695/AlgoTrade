@@ -21,17 +21,20 @@ from rm.engine import run_engine, reset_basket, get_basket_state
 
 logging.basicConfig(level=logging.INFO)
 
-# In-memory caches updated on each page load
+# In-memory caches — updated only by _refresh_cache(), never by page loads directly
 _basket_cache: list[dict] = []
-_all_positions_cache: list[dict] = []   # all positions with LTP applied, used by /pnl
+_all_positions_cache: list[dict] = []
+_unallocated_cache: list[dict] = []
+
+CACHE_REFRESH_INTERVAL = 60  # seconds between background cache refreshes
 
 
 def _get_baskets_for_engine() -> list[dict]:
     return _basket_cache
 
 
-def _compute_pnl(p: dict) -> tuple[float, float]:
-    """Return (pnl, pnl_pct) for a position using live LTP or Kite last_price fallback."""
+def _compute_pnl(p: dict) -> tuple[float, float, float]:
+    """Return (ltp, pnl, pnl_pct) using live ticker LTP or quote fallback."""
     ltp  = ticker.get_ltp(p.get("instrument_token", 0)) or p.get("last_price", 0)
     qty  = p["quantity"]
     avg  = p["average_price"]
@@ -42,14 +45,114 @@ def _compute_pnl(p: dict) -> tuple[float, float]:
     return ltp, pnl, pnl_pct
 
 
+def _position_key(p: dict) -> str:
+    return f"{p['tradingsymbol']}|{p['exchange']}|{p['product']}"
+
+
 async def _exit_fn(basket_id: int, positions: list, reason: str, event_id: int | None = None):
     order_type = await asyncio.to_thread(get_order_type, basket_id)
     await place_exit_orders(basket_id, positions, reason, order_type, event_id)
 
 
+async def _refresh_cache():
+    """Fetch positions from Kite, seed LTP, rebuild basket + position caches.
+
+    This is the ONLY place that writes to _basket_cache / _all_positions_cache.
+    Called at startup, every CACHE_REFRESH_INTERVAL seconds by the background
+    loop, and on each page load (so browser-active sessions get instant updates).
+    The RM engine reads from these caches — it never depends on a page load.
+    """
+    global _basket_cache, _all_positions_cache, _unallocated_cache
+
+    try:
+        positions = await asyncio.to_thread(fetch_positions)
+    except Exception as e:
+        logging.error(f"Cache refresh: fetch_positions failed: {e}")
+        return  # Keep existing cache — better stale than empty
+
+    # Seed ltp_store for tokens the WebSocket hasn't seen yet (overnight positions,
+    # fresh startup before first tick). seed_ltp skips tokens already priced by
+    # the ticker so it never overwrites fresher data.
+    try:
+        await asyncio.to_thread(ticker.seed_ltp, positions, get_kite())
+    except Exception as e:
+        logging.warning(f"Cache refresh: LTP seeding failed: {e}")
+        # Continue — ticker WebSocket may already have live data
+
+    # Create / update WebSocket subscription (idempotent — no reconnect if already live)
+    tokens = [p["instrument_token"] for p in positions if p.get("instrument_token")]
+    if tokens:
+        ticker.subscribe(tokens)
+
+    # Apply live LTP to each position
+    for p in positions:
+        ltp, pnl, pnl_pct = _compute_pnl(p)
+        p["last_price"] = ltp
+        p["pnl"]        = pnl
+        p["pnl_pct"]    = pnl_pct
+
+    # Build basket → positions mapping from DB
+    assigned = get_assigned_positions()
+    baskets  = list_baskets()
+
+    basket_positions: dict[int, list[dict]] = {b["id"]: [] for b in baskets}
+    unallocated: list[dict] = []
+
+    for p in positions:
+        key = _position_key(p)
+        bid = assigned.get(key)
+        if bid and bid in basket_positions:
+            basket_positions[bid].append(p)
+        else:
+            unallocated.append(p)
+
+    for b in baskets:
+        b["order_type"] = b.get("order_type", "LIMIT")
+        b["positions"]  = basket_positions[b["id"]]
+        b["pnl"]        = sum(p["pnl"] for p in b["positions"])
+        basket_cost     = sum(
+            abs(p["average_price"]) * abs(p["quantity"]) * p.get("multiplier", 1)
+            for p in b["positions"]
+        )
+        b["pnl_pct"]    = (b["pnl"] / basket_cost * 100) if basket_cost else 0.0
+        b["rm"]         = get_rm(b["id"])
+        b["rm_enabled"] = bool(
+            b["rm"].get("pt_active") or b["rm"].get("lg_active") or
+            b["rm"].get("ps_active") or b["rm"].get("eod_exit")
+        )
+        b["fired"]      = get_basket_state(b["id"]).get("fired", False)
+
+    _basket_cache        = baskets
+    _all_positions_cache = positions
+    _unallocated_cache   = unallocated
+
+
+async def _refresh_loop():
+    """Background task — keeps caches and ticker fresh without any page loads.
+    Runs every CACHE_REFRESH_INTERVAL seconds so the RM engine has current data
+    even when no browser session is active.
+    """
+    while True:
+        await asyncio.sleep(CACHE_REFRESH_INTERVAL)
+        try:
+            await _refresh_cache()
+            logging.debug("Background cache refresh complete.")
+        except Exception as e:
+            logging.error(f"Background cache refresh failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Pre-populate caches before starting the engine so it has data immediately
+    # rather than waiting for a page load or the first 60-second timer.
+    try:
+        await _refresh_cache()
+        logging.info("Startup cache loaded.")
+    except Exception as e:
+        logging.error(f"Startup cache load failed: {e}")
+
+    asyncio.create_task(_refresh_loop())
     asyncio.create_task(run_engine(
         get_baskets_fn=_get_baskets_for_engine,
         ltp_fn=ticker.get_ltp,
@@ -69,89 +172,36 @@ app.include_router(logs_router)
 templates = Jinja2Templates(directory="templates")
 
 
-def _position_key(p: dict) -> str:
-    return f"{p['tradingsymbol']}|{p['exchange']}|{p['product']}"
-
-
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     if not load_token():
         return RedirectResponse(url="/auth/login")
 
+    # Refresh cache on page load — gives the browser a fully-current view and
+    # keeps engine data fresh while a user is actively monitoring.
     try:
-        positions = fetch_positions()
+        await _refresh_cache()
     except Exception as e:
-        logging.error(f"Failed to fetch positions: {e}")
-        return RedirectResponse(url="/auth/login")
+        logging.error(f"Page load cache refresh failed: {e}")
+        if not _all_positions_cache and not _basket_cache:
+            return RedirectResponse(url="/auth/login")
 
-    # Seed ltp_store with fresh quote prices before computing P&L.
-    # Prevents overnight positions from showing prev-day settlement price
-    # when the WebSocket ticker hasn't yet received its first tick.
-    ticker.seed_ltp(positions, get_kite())
+    positions   = _all_positions_cache
+    baskets     = _basket_cache
+    unallocated = _unallocated_cache
 
-    # Refresh ticker subscriptions whenever the page loads
-    tokens = [p["instrument_token"] for p in positions if p.get("instrument_token")]
-    if tokens:
-        ticker.subscribe(tokens)
-
-    # Always recompute P&L from entry price — fixes overnight positions and ticker race.
-    # Prefers live LTP from WebSocket ticker; falls back to Kite's last_price field.
-    for p in positions:
-        ltp, pnl, pnl_pct = _compute_pnl(p)
-        p["last_price"] = ltp
-        p["pnl"]        = pnl
-        p["pnl_pct"]    = pnl_pct
-
-    assigned = get_assigned_positions()
-    baskets = list_baskets()
-    global _basket_cache, _all_positions_cache
-
-    # Build basket_id → positions map
-    basket_positions: dict[int, list[dict]] = {b["id"]: [] for b in baskets}
-    unallocated: list[dict] = []
-
-    for p in positions:
-        key = _position_key(p)
-        bid = assigned.get(key)
-        if bid and bid in basket_positions:
-            basket_positions[bid].append(p)
-        else:
-            unallocated.append(p)
-
-    # Compute basket MTM P&L
-    for b in baskets:
-        b["order_type"] = b.get("order_type", "LIMIT")
-        b["positions"] = basket_positions[b["id"]]
-        b["pnl"] = sum(p["pnl"] for p in b["positions"])
-        basket_cost = sum(
-            abs(p["average_price"]) * abs(p["quantity"]) * p.get("multiplier", 1)
-            for p in b["positions"]
-        )
-        b["pnl_pct"] = (b["pnl"] / basket_cost * 100) if basket_cost else 0.0
-        b["rm"] = get_rm(b["id"])
-        b["rm_enabled"] = bool(
-            b["rm"].get("pt_active") or b["rm"].get("lg_active") or
-            b["rm"].get("ps_active") or b["rm"].get("eod_exit")
-        )
-        b["fired"] = get_basket_state(b["id"]).get("fired", False)
-
-    # Update caches
-    _basket_cache = baskets
-    _all_positions_cache = positions
-
-    # KPI counts
-    active_baskets = [b for b in baskets if len(b["positions"]) > 0]
-    baskets_without_rm = [b for b in active_baskets if not b["rm_enabled"]]
+    active_baskets      = [b for b in baskets if len(b["positions"]) > 0]
+    baskets_without_rm  = [b for b in active_baskets if not b["rm_enabled"]]
 
     return templates.TemplateResponse("index.html", {
-        "request": request,
-        "positions": positions,
-        "unallocated": unallocated,
-        "baskets": baskets,
-        "active_baskets_count": len(active_baskets),
+        "request":                  request,
+        "positions":                positions,
+        "unallocated":              unallocated,
+        "baskets":                  baskets,
+        "active_baskets_count":     len(active_baskets),
         "baskets_without_rm_count": len(baskets_without_rm),
-        "total_pnl": sum(p["pnl"] for p in positions),
-        "user_id": load_user_id(),
+        "total_pnl":                sum(p["pnl"] for p in positions),
+        "user_id":                  load_user_id(),
     })
 
 
@@ -163,16 +213,14 @@ async def get_pnl():
 
     for p in _all_positions_cache:
         ltp, pnl, pnl_pct = _compute_pnl(p)
-        key = f"{p['tradingsymbol']}|{p['exchange']}|{p['product']}"
+        key = _position_key(p)
         positions_data[key] = {"ltp": ltp, "pnl": pnl, "pnl_pct": pnl_pct}
         total_pnl += pnl
 
     baskets_data: dict[str, dict] = {}
     for b in _basket_cache:
         basket_pnl = sum(
-            positions_data.get(
-                f"{p['tradingsymbol']}|{p['exchange']}|{p['product']}", {}
-            ).get("pnl", 0)
+            positions_data.get(_position_key(p), {}).get("pnl", 0)
             for p in b.get("positions", [])
         )
         basket_cost = sum(

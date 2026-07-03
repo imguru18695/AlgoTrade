@@ -101,11 +101,20 @@ async def place_exit_orders(basket_id: int, positions: list[dict], reason: str, 
             raise r
     errors = [r for r in results if isinstance(r, Exception)]
     if errors:
-        # Raise so _fire does not mark this basket as fired — engine will retry
-        raise RuntimeError(
-            f"Basket {basket_id}: {len(errors)}/{len(tasks)} exit(s) failed: {errors[0]}"
+        if len(errors) == len(tasks):
+            # Every leg failed — raise so _fire keeps fired=False and engine retries
+            raise RuntimeError(
+                f"Basket {basket_id}: all {len(tasks)} exits failed: {errors[0]}"
+            )
+        # Partial failure: some legs were placed, others failed.
+        # Do NOT raise — _fire will set fired=True to prevent duplicate storms.
+        # Any already-exited legs show qty=0 in Kite so the per-leg qty=0 guard
+        # in _exit_one prevents double-exits if the engine somehow retries.
+        logger.error(
+            f"Basket {basket_id}: {len(errors)}/{len(tasks)} exit leg(s) failed — "
+            f"fired=True will be set. Check exit logs. First error: {errors[0]}"
         )
-    logger.info(f"Basket {basket_id}: all exit orders processed.")
+    logger.info(f"Basket {basket_id}: exit processing complete ({len(tasks) - len(errors)}/{len(tasks)} succeeded).")
 
 
 async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_positions: list, event_id: int | None = None):
@@ -167,17 +176,28 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
 
     remaining_qty = qty
     attempt = 0
+    no_depth_checks = 0
 
     while remaining_qty > 0 and attempt < MAX_LIMIT_ATTEMPTS:
-        attempt += 1
         placed_this_attempt = remaining_qty
 
         # Fetch fresh best bid/ask
         price = await _get_best_price(kite, sym, exchange, side)
         if price is None:
-            logger.warning(f"Basket {basket_id}: no depth for {sym}, waiting 5s...")
+            no_depth_checks += 1
+            logger.warning(
+                f"Basket {basket_id}: no depth for {sym} (check {no_depth_checks}), waiting..."
+            )
+            if no_depth_checks >= MAX_LIMIT_ATTEMPTS:
+                raise RuntimeError(
+                    f"Basket {basket_id}: {sym} — no market depth after "
+                    f"{no_depth_checks} checks; engine will retry on next tick."
+                )
             await asyncio.sleep(LIMIT_CHECK_INTERVAL)
             continue
+        no_depth_checks = 0  # reset whenever we get a valid price
+
+        attempt += 1  # only counts actual order placement attempts
 
         # Place limit order
         order_id = None

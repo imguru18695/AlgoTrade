@@ -61,8 +61,14 @@ def _fresh_state() -> dict:
 def _get_state(basket_id: int) -> dict:
     today = datetime.now(IST).date()
     s = _state.get(basket_id)
-    if s is None or s["date"] != today:
+    if s is None:
         _state[basket_id] = _fresh_state()
+    elif s["date"] != today:
+        # New trading day: reset tick counters and fired flag, but preserve the
+        # earned Profit Shield floor so overnight positions keep their protection.
+        preserved_floor = s["floor"]
+        _state[basket_id] = _fresh_state()
+        _state[basket_id]["floor"] = preserved_floor
     return _state[basket_id]
 
 
@@ -140,7 +146,7 @@ async def _check_basket(
 
     # ── EOD auto-exit ────────────────────────────────────────────────
     if rm.get("eod_exit") and _past_eod_time():
-        await _fire(exit_fn, bid, positions, "EOD auto-exit at 3:25 PM", basket)
+        await _fire(exit_fn, bid, positions, "EOD auto-exit at 3:25 PM", basket, eod=True)
         return
 
     # ── Profit Target (takes priority over Profit Shield) ────────────
@@ -243,7 +249,7 @@ async def run_engine(
                 logger.error(f"RM engine: unhandled error in basket check: {r}")
 
 
-async def _fire(exit_fn, basket_id, positions, reason, basket):
+async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False):
     logger.info(f"Basket {basket_id}: FIRING EXIT — {reason}")
     # Create the exit event log record before placing orders so we have an event_id
     # to associate with each order attempt.
@@ -261,19 +267,32 @@ async def _fire(exit_fn, basket_id, positions, reason, basket):
         logger.error(f"Basket {basket_id}: failed to create exit event log: {e}")
         event_id = None
 
+    exit_succeeded = True
     try:
         await exit_fn(basket_id, positions, reason, event_id)
     except asyncio.CancelledError:
         raise  # Let task cancellation (app shutdown) propagate cleanly
     except Exception as e:
+        exit_succeeded = False
         logger.error(f"Basket {basket_id}: exit_fn failed: {e}")
-        return  # Don't mark fired if exit_fn threw — allows retry
+        if not eod:
+            return  # PT/LG/PS: allow retry on next tick
+        # EOD: fall through to set fired=True regardless.
+        # Prevents a 4-minute storm of duplicate exit orders after 15:25.
+        # If the exit genuinely failed, the position stays open and requires
+        # manual intervention — operator should check exit logs immediately.
+        logger.error(
+            f"Basket {basket_id}: EOD exit failed — marking fired=True to prevent "
+            f"duplicate orders. Check exit logs and close manually if needed."
+        )
+
     # Re-fetch state — rearm_basket() may have popped it while exit_fn was awaiting.
     # If popped, re-insert a fired entry so the engine doesn't double-fire on the
-    # next tick against positions that are already being exited. The user can Re-arm
-    # again deliberately if they genuinely want RM re-evaluation.
+    # next tick against positions that are already being exited.
     current = _state.get(basket_id)
     if current is None:
         _state[basket_id] = _fresh_state()
         current = _state[basket_id]
     current["fired"] = True
+    if exit_succeeded:
+        logger.info(f"Basket {basket_id}: exit confirmed, fired=True")
