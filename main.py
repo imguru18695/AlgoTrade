@@ -13,6 +13,7 @@ from auth.token_store import load_token, load_user_id
 from baskets.routes import router as baskets_router
 from logs.routes import router as logs_router
 from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type
+from kite.client import get_kite
 from kite.positions import fetch_positions
 from kite import ticker
 from kite.orders import place_exit_orders
@@ -82,6 +83,11 @@ async def index(request: Request):
     except Exception as e:
         logging.error(f"Failed to fetch positions: {e}")
         return RedirectResponse(url="/auth/login")
+
+    # Seed ltp_store with fresh quote prices before computing P&L.
+    # Prevents overnight positions from showing prev-day settlement price
+    # when the WebSocket ticker hasn't yet received its first tick.
+    ticker.seed_ltp(positions, get_kite())
 
     # Refresh ticker subscriptions whenever the page loads
     tokens = [p["instrument_token"] for p in positions if p.get("instrument_token")]

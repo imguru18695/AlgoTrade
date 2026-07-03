@@ -60,6 +60,29 @@ def subscribe(instrument_tokens: list[int]):
         _ticker.connect(threaded=True)
 
 
+def seed_ltp(positions: list[dict], kite) -> None:
+    """Seed ltp_store with fresh prices from kite.quote() on page load.
+    Prevents stale last_price (prev-day close) being used for overnight positions
+    before the WebSocket ticker has received its first tick.
+    """
+    if not positions:
+        return
+    token_map = {
+        f"{p['exchange']}:{p['tradingsymbol']}": p["instrument_token"]
+        for p in positions if p.get("instrument_token")
+    }
+    if not token_map:
+        return
+    try:
+        quotes = kite.quote(list(token_map.keys()))
+        for key, data in quotes.items():
+            token = token_map.get(key)
+            if token and data.get("last_price"):
+                ltp_store[token] = data["last_price"]
+    except Exception as e:
+        logger.warning(f"LTP seeding via quote() failed: {e}")
+
+
 def stop():
     global _ticker
     with _lock:
