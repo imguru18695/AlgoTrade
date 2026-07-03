@@ -1,12 +1,25 @@
 import sqlite3
+import contextlib
 from config import DB_FILE
 
 
-def get_conn() -> sqlite3.Connection:
+@contextlib.contextmanager
+def get_conn():
+    """Context manager that opens a SQLite connection, commits on success,
+    rolls back on error, and ALWAYS closes the connection — releasing the
+    file descriptor immediately without relying on the cyclic GC.
+    """
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=3000")
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
