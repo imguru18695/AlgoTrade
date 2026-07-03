@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from kiteconnect import KiteConnect
 from config import KITE_API_KEY, KITE_API_SECRET, REDIRECT_URL
 from auth.token_store import save_token, clear_token
+from kite.client import reset_kite
 
 router = APIRouter(prefix="/auth")
 
@@ -58,4 +59,5 @@ async def callback(request: Request):
 @router.get("/logout")
 async def logout():
     clear_token()
+    reset_kite()
     return RedirectResponse(url="/auth/login", status_code=302)
