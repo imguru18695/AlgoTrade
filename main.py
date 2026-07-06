@@ -225,6 +225,40 @@ async def index(request: Request):
     })
 
 
+@app.get("/debug/positions")
+async def debug_positions():
+    """Compare our computed P&L against Kite's own field — helps diagnose MTM discrepancies."""
+    from kite.client import get_kite
+    raw = await asyncio.to_thread(get_kite().positions)
+    rows = []
+    for p in raw.get("net", []):
+        if p["quantity"] == 0:
+            continue
+        sym      = p["tradingsymbol"]
+        qty      = p["quantity"]
+        avg      = p.get("average_price", 0)
+        lp       = p.get("last_price", 0)
+        mult     = p.get("multiplier", 1) or 1
+        kite_pnl = p.get("pnl", 0)
+        our_pnl  = (lp - avg) * qty * mult
+        token    = p.get("instrument_token")
+        ws_ltp   = ticker.get_ltp(token) if token else None
+        ws_pnl   = (ws_ltp - avg) * qty * mult if ws_ltp is not None else None
+        rows.append({
+            "symbol":       sym,
+            "qty":          qty,
+            "avg_price":    avg,
+            "last_price":   lp,
+            "multiplier":   mult,
+            "kite_pnl":     kite_pnl,
+            "our_pnl_rest": round(our_pnl, 2),
+            "ws_ltp":       ws_ltp,
+            "ws_pnl":       round(ws_pnl, 2) if ws_pnl is not None else None,
+            "diff":         round(our_pnl - kite_pnl, 2),
+        })
+    return JSONResponse(rows)
+
+
 @app.get("/pnl")
 async def get_pnl():
     """Lightweight P&L endpoint — recomputes from ticker/last_price without a Kite API call."""
