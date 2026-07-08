@@ -75,6 +75,7 @@ def _stop_locked():
     _ticker = None
     _ticker_token = None
     _connected = False
+    ltp_store.clear()  # stale prices are worse than no prices — force re-seed on next refresh
 
 
 def _create_ticker(auth_token: str):
