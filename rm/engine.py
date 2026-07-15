@@ -23,6 +23,9 @@ CHECK_INTERVAL = 1  # seconds
 # basket_id → {date, floor, fired, pt_checks, lg_checks}
 _state: dict[int, dict] = {}
 
+# Strong refs to in-flight exit tasks — prevents GC between ticker ticks.
+_active_fires: set[asyncio.Task] = set()
+
 
 def reset_basket(basket_id: int):
     """Reset tick counters after a manual RM config save.
@@ -145,9 +148,19 @@ async def _check_basket(
 
     logger.debug(f"Basket {bid}: live P&L = ₹{pnl:,.0f}")
 
+    def _spawn_fire(reason: str, is_eod: bool = False):
+        """Spawn _fire as a background task so this basket check returns immediately,
+        allowing the engine to keep evaluating other baskets without waiting for
+        order placement (which can take 5-30 s for LIMIT orders).
+        _fire() sets fired=True immediately on entry, so the next tick won't re-trigger.
+        """
+        task = asyncio.create_task(_fire(exit_fn, bid, positions, reason, basket, eod=is_eod))
+        _active_fires.add(task)
+        task.add_done_callback(_active_fires.discard)
+
     # ── EOD auto-exit ────────────────────────────────────────────────
     if rm.get("eod_exit") and _past_eod_time():
-        await _fire(exit_fn, bid, positions, "EOD auto-exit at 3:25 PM", basket, eod=True)
+        _spawn_fire("EOD auto-exit at 3:25 PM", is_eod=True)
         return
 
     # ── Profit Target (takes priority over Profit Shield) ────────────
@@ -157,8 +170,7 @@ async def _check_basket(
             state["pt_checks"] += 1
             logger.info(f"Basket {bid}: PT check {state['pt_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["pt_checks"] >= needed:
-                await _fire(exit_fn, bid, positions,
-                      f"Profit Target ₹{rm['pt_inr']:,.0f} hit", basket)
+                _spawn_fire(f"Profit Target ₹{rm['pt_inr']:,.0f} hit")
                 return
         else:
             if state["pt_checks"] > 0:
@@ -172,8 +184,7 @@ async def _check_basket(
             state["lg_checks"] += 1
             logger.info(f"Basket {bid}: LG check {state['lg_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["lg_checks"] >= needed:
-                await _fire(exit_fn, bid, positions,
-                      f"Loss Guard -₹{rm['lg_inr']:,.0f} breached", basket)
+                _spawn_fire(f"Loss Guard -₹{rm['lg_inr']:,.0f} breached")
                 return
         else:
             if state["lg_checks"] > 0:
@@ -206,8 +217,7 @@ async def _check_basket(
         # On day-2 open with an overnight preserved floor, an immediate gap-down
         # must NOT fire — the position must re-reach ps_trigger first.
         if state["ps_armed"] and state["floor"] is not None and pnl < state["floor"]:
-            await _fire(exit_fn, bid, positions,
-                  f"Profit Shield floor ₹{state['floor']:,.0f} breached", basket)
+            _spawn_fire(f"Profit Shield floor ₹{state['floor']:,.0f} breached")
             return
 
 
@@ -244,22 +254,34 @@ async def run_engine(
             logger.error(f"RM engine: failed to get baskets: {e}")
             continue
 
-        # Run all basket checks concurrently — one basket's exit does not block others.
-        results = await asyncio.gather(
-            *[_check_basket(b, exit_fn, ltp_fn, no_ltp_fn) for b in baskets],
-            return_exceptions=True,
-        )
-        for r in results:
-            if isinstance(r, asyncio.CancelledError):
-                raise r  # propagate shutdown cancellation
-            if isinstance(r, Exception):
-                logger.error(f"RM engine: unhandled error in basket check: {r}")
+        # Fire each basket check as an independent background task so one basket's
+        # multi-second LIMIT exit does not delay RM evaluation for all other baskets.
+        for b in baskets:
+            task = asyncio.create_task(_check_basket_safe(b, exit_fn, ltp_fn, no_ltp_fn))
+            _active_fires.add(task)
+            task.add_done_callback(_active_fires.discard)
+
+
+async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn):
+    """Wrapper that catches all exceptions so a failed basket check never silently
+    kills the background task without a traceback."""
+    try:
+        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.error("RM engine: unhandled error in basket check", exc_info=e)
 
 
 async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False):
     logger.info(f"Basket {basket_id}: FIRING EXIT — {reason}")
-    # Create the exit event log record before placing orders so we have an event_id
-    # to associate with each order attempt.
+
+    # Set fired=True immediately — prevents the next engine tick from re-triggering
+    # this basket while order placement is in progress (which can take 5-30 seconds
+    # for LIMIT orders). On non-EOD failure we reset it below to allow a retry.
+    current = _state.setdefault(basket_id, _fresh_state())
+    current["fired"] = True
+
     try:
         from logs.service import create_exit_event
         basket_name = basket.get("name", f"Basket {basket_id}")
@@ -283,14 +305,18 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
         exit_succeeded = False
         logger.error(f"Basket {basket_id}: exit_fn failed: {e}")
         if not eod:
-            return  # PT/LG/PS: allow retry on next tick
-        # EOD: fall through to set fired=True regardless.
-        # Prevents a 4-minute storm of duplicate exit orders after 15:25.
-        # If the exit genuinely failed, the position stays open and requires
-        # manual intervention — operator should check exit logs immediately.
+            # PT/LG/PS: reset fired so the engine retries on the next tick.
+            # Legs that already filled show qty=0 in live positions, so _exit_one's
+            # qty=0 guard prevents them from being double-exited on retry.
+            s = _state.get(basket_id)
+            if s:
+                s["fired"] = False
+            return
+        # EOD: keep fired=True regardless — prevents a storm of duplicate orders
+        # after 15:25. Operator must close any remaining positions manually.
         logger.error(
-            f"Basket {basket_id}: EOD exit failed — marking fired=True to prevent "
-            f"duplicate orders. Check exit logs and close manually if needed."
+            f"Basket {basket_id}: EOD exit failed — fired=True to prevent duplicates. "
+            f"Check exit logs and close positions manually if needed."
         )
 
     # Re-fetch state — rearm_basket() may have popped it while exit_fn was awaiting.

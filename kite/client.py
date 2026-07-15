@@ -7,11 +7,22 @@ from auth.token_store import load_token, clear_token
 _kite: KiteConnect | None = None
 
 
+def _on_session_expiry():
+    """Called by KiteConnect when the server invalidates the session.
+    Clears both the token file AND the singleton — otherwise subsequent get_kite()
+    calls skip creation (singleton is non-None) and skip set_access_token (token is
+    None), returning a client that still carries the expired token indefinitely.
+    """
+    clear_token()
+    global _kite
+    _kite = None
+
+
 def get_kite() -> KiteConnect:
     global _kite
     if _kite is None:
         _kite = KiteConnect(api_key=KITE_API_KEY)
-        _kite.set_session_expiry_hook(clear_token)
+        _kite.set_session_expiry_hook(_on_session_expiry)
     token = load_token()
     if token:
         _kite.set_access_token(token)

@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from kiteconnect import KiteConnect
@@ -47,9 +49,17 @@ async def callback(request: Request):
     if not request_token:
         return HTMLResponse("Missing request_token. Please try logging in again.", status_code=400)
 
-    kite = _kite()
-    session = kite.generate_session(request_token, api_secret=KITE_API_SECRET)
-    save_token(session["access_token"], user_id=session.get("user_id", ""))
+    try:
+        kite = _kite()
+        # generate_session is a blocking HTTP call — run off the event loop so we
+        # don't freeze WebSocket ticks and RM engine checks during login.
+        session = await asyncio.to_thread(
+            kite.generate_session, request_token, api_secret=KITE_API_SECRET
+        )
+        save_token(session["access_token"], user_id=session.get("user_id", ""))
+    except Exception as e:
+        logging.error(f"Login callback failed: {e}")
+        return RedirectResponse(url="/auth/login", status_code=302)
 
     return RedirectResponse(url="/", status_code=302)
 

@@ -6,11 +6,18 @@ _PROFILE_FILE = "user_profile.json"
 
 
 def save_token(access_token: str, user_id: str = ""):
-    with open(TOKEN_FILE, "w") as f:
+    # Write atomically: open() truncates immediately, so a SIGKILL between
+    # truncation and write would leave an empty file → false logout with open
+    # positions. Write to a .tmp file first, then rename atomically.
+    tmp = TOKEN_FILE + ".tmp"
+    with open(tmp, "w") as f:
         f.write(access_token.strip())
+    os.replace(tmp, TOKEN_FILE)
     if user_id:
-        with open(_PROFILE_FILE, "w") as f:
+        tmp_p = _PROFILE_FILE + ".tmp"
+        with open(tmp_p, "w") as f:
             json.dump({"user_id": user_id}, f)
+        os.replace(tmp_p, _PROFILE_FILE)
 
 
 def load_token() -> str | None:

@@ -94,10 +94,13 @@ async def _refresh_cache():
         logging.warning(f"Cache refresh: LTP seeding failed: {e}")
         # Continue — ticker WebSocket may already have live data
 
-    # Create / update WebSocket subscription (idempotent — no reconnect if already live)
+    # Create / update WebSocket subscription (idempotent — no reconnect if already live).
+    # Run off the event loop: subscribe() acquires a threading.Lock and makes
+    # synchronous WebSocket sends — keeping it on the event loop stalls all
+    # coroutines (RM ticks, HTTP responses) for the duration of those sends.
     tokens = [p["instrument_token"] for p in positions if p.get("instrument_token")]
     if tokens:
-        ticker.subscribe(tokens)
+        await asyncio.to_thread(ticker.subscribe, tokens)
 
     # Apply live LTP to each position
     for p in positions:
@@ -106,9 +109,14 @@ async def _refresh_cache():
         p["pnl"]        = pnl
         p["pnl_pct"]    = pnl_pct
 
-    # Build basket → positions mapping from DB
-    assigned = get_assigned_positions()
-    baskets  = list_baskets()
+    # Build basket → positions mapping from DB.
+    # Run SQLite calls off the event loop: each opens a connection with busy_timeout=3s;
+    # lock contention could stall the event loop for the full timeout once per minute.
+    assigned   = await asyncio.to_thread(get_assigned_positions)
+    baskets    = await asyncio.to_thread(list_baskets)
+    rm_configs = await asyncio.gather(
+        *[asyncio.to_thread(get_rm, b["id"]) for b in baskets]
+    )
 
     basket_positions: dict[int, list[dict]] = {b["id"]: [] for b in baskets}
     unallocated: list[dict] = []
@@ -121,7 +129,7 @@ async def _refresh_cache():
         else:
             unallocated.append(p)
 
-    for b in baskets:
+    for b, rm in zip(baskets, rm_configs):
         b["order_type"] = b.get("order_type", "LIMIT")
         b["positions"]  = basket_positions[b["id"]]
         b["pnl"]        = sum(p["pnl"] for p in b["positions"])
@@ -130,10 +138,10 @@ async def _refresh_cache():
             for p in b["positions"]
         )
         b["pnl_pct"]    = (b["pnl"] / basket_cost * 100) if basket_cost else 0.0
-        b["rm"]         = get_rm(b["id"])
+        b["rm"]         = rm
         b["rm_enabled"] = bool(
-            b["rm"].get("pt_active") or b["rm"].get("lg_active") or
-            b["rm"].get("ps_active") or b["rm"].get("eod_exit")
+            rm.get("pt_active") or rm.get("lg_active") or
+            rm.get("ps_active") or rm.get("eod_exit")
         )
         b["fired"]      = get_basket_state(b["id"]).get("fired", False)
 
@@ -180,6 +188,12 @@ async def lifespan(app: FastAPI):
         no_ltp_fn=lambda: logging.warning("RM engine: no live prices available."),
     )))
     yield
+    # Cancel background tasks BEFORE stopping the ticker — otherwise _refresh_loop
+    # can re-create the WebSocket after ticker.stop() has torn it down.
+    for task in list(_background_tasks):
+        task.cancel()
+    if _background_tasks:
+        await asyncio.gather(*list(_background_tasks), return_exceptions=True)
     ticker.stop()
 
 

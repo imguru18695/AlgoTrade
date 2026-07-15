@@ -190,8 +190,6 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
                 )
             await asyncio.sleep(LIMIT_CHECK_INTERVAL)
             continue
-        no_depth_checks = 0  # reset whenever we get a valid price
-
         attempt += 1  # only counts actual order placement attempts
 
         # Place limit order
