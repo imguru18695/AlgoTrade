@@ -153,8 +153,11 @@ async def _check_basket(
         allowing the engine to keep evaluating other baskets without waiting for
         order placement (which can take 5-30 s for LIMIT orders).
         _fire() sets fired=True immediately on entry, so the next tick won't re-trigger.
+        pnl is captured from the enclosing scope — it's the live MTM at trigger time.
         """
-        task = asyncio.create_task(_fire(exit_fn, bid, positions, reason, basket, eod=is_eod))
+        task = asyncio.create_task(
+            _fire(exit_fn, bid, positions, reason, basket, eod=is_eod, mtm_at_trigger=pnl)
+        )
         _active_fires.add(task)
         task.add_done_callback(_active_fires.discard)
 
@@ -273,8 +276,9 @@ async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn):
         logger.error("RM engine: unhandled error in basket check", exc_info=e)
 
 
-async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False):
-    logger.info(f"Basket {basket_id}: FIRING EXIT — {reason}")
+async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False,
+               mtm_at_trigger: float | None = None):
+    logger.info(f"Basket {basket_id}: FIRING EXIT — {reason} | MTM=₹{mtm_at_trigger:,.0f}" if mtm_at_trigger is not None else f"Basket {basket_id}: FIRING EXIT — {reason}")
 
     # Set fired=True immediately — prevents the next engine tick from re-triggering
     # this basket while order placement is in progress (which can take 5-30 seconds
@@ -291,6 +295,7 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
         event_id = await asyncio.to_thread(
             create_exit_event,
             basket_id, basket_name, triggered_at, reason, order_type, rm_snapshot,
+            mtm_at_trigger,
         )
     except Exception as e:
         logger.error(f"Basket {basket_id}: failed to create exit event log: {e}")

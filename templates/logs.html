@@ -274,6 +274,13 @@
             <div class="event-meta">
                 <div class="event-meta-item">Triggered at <span>{{ ev.triggered_at[:19].replace('T',' ') }} IST</span></div>
                 <div class="event-meta-item">Basket ID <span>#{{ ev.basket_id }}</span></div>
+                {% if ev.mtm_at_trigger is not none %}
+                <div class="event-meta-item">MTM at trigger
+                    <span style="color:{{ 'var(--profit)' if ev.mtm_at_trigger >= 0 else 'var(--loss)' }}">
+                        {{ '+' if ev.mtm_at_trigger >= 0 else '' }}₹{{ "{:,.0f}".format(ev.mtm_at_trigger) }}
+                    </span>
+                </div>
+                {% endif %}
             </div>
         </div>
         <div>

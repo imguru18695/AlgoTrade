@@ -39,6 +39,7 @@ def init_db():
         # Safe migrations for log tables
         for migration in [
             "ALTER TABLE exit_events ADD COLUMN order_type TEXT DEFAULT 'LIMIT'",
+            "ALTER TABLE exit_events ADD COLUMN mtm_at_trigger REAL",
         ]:
             try:
                 conn.execute(migration)
@@ -54,7 +55,8 @@ def init_db():
                 triggered_at    TEXT NOT NULL,
                 trigger_reason  TEXT NOT NULL,
                 order_type      TEXT NOT NULL DEFAULT 'LIMIT',
-                rm_snapshot     TEXT NOT NULL
+                rm_snapshot     TEXT NOT NULL,
+                mtm_at_trigger  REAL
             );
 
             CREATE TABLE IF NOT EXISTS exit_orders (
