@@ -127,23 +127,30 @@ def _create_ticker(auth_token: str):
 
 
 def seed_ltp(positions: list[dict], kite) -> None:
-    """Seed ltp_store with quote API prices for tokens not yet in the store.
-    Only seeds missing tokens — preserves fresher WebSocket data already received.
-    Called at startup and on each background refresh, before the WebSocket has
-    received its first tick for an instrument.
+    """Seed ltp_store with quote API prices.
+
+    When WebSocket is live (_connected=True): only seed tokens not yet priced
+    so we never overwrite fresher tick data.
+    When WebSocket is down (_connected=False): refresh ALL tokens from REST so
+    a mid-session dropout never leaves prices frozen longer than one refresh cycle.
     """
     if not positions:
         return
-    # Only fetch quotes for tokens the WebSocket hasn't yet priced
-    missing = [
-        p for p in positions
-        if p.get("instrument_token") and p["instrument_token"] not in ltp_store
-    ]
-    if not missing:
+    if _connected:
+        # Only fill gaps — don't overwrite live tick data
+        candidates = [
+            p for p in positions
+            if p.get("instrument_token") and p["instrument_token"] not in ltp_store
+        ]
+    else:
+        # WebSocket is down — refresh everything from REST (max 60s stale)
+        logger.warning("KiteTicker not connected — refreshing all LTPs from REST API")
+        candidates = [p for p in positions if p.get("instrument_token")]
+    if not candidates:
         return
     token_map = {
         f"{p['exchange']}:{p['tradingsymbol']}": p["instrument_token"]
-        for p in missing
+        for p in candidates
     }
     try:
         quotes = kite.quote(list(token_map.keys()))
