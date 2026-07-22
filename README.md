@@ -2,11 +2,7 @@
 
 A real-time risk management platform for Zerodha F&O traders. Set your exit rules once — the engine watches your positions 24/7 and fires orders automatically when your thresholds are hit.
 
-Live on two accounts at:
-- [neerajaalgotrading.duckdns.org](http://neerajaalgotrading.duckdns.org)
-- [nirmalaalgotrading.duckdns.org](http://nirmalaalgotrading.duckdns.org)
-
----
+Live on two accounts
 
 ## What it does
 
