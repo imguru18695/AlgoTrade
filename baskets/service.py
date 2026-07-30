@@ -119,6 +119,15 @@ def save_rm_loss_guard(basket_id: int, active: bool, inr: float | None, ticks: i
         """, (basket_id, int(active), inr, ticks))
 
 
+def save_delete_on_fire(basket_id: int, enabled: bool):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO basket_rm (basket_id, delete_on_fire)
+            VALUES (?, ?)
+            ON CONFLICT(basket_id) DO UPDATE SET delete_on_fire=excluded.delete_on_fire
+        """, (basket_id, int(enabled)))
+
+
 def save_eod_exit(basket_id: int, enabled: bool):
     with get_conn() as conn:
         conn.execute("""

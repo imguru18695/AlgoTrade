@@ -102,6 +102,18 @@
             <span class="pct-badge {{ 'pct-profit' if b.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(b.pnl_pct) }}%</span>
             {% endif %}
         </div>
+        <div class="basket-stat-chips" id="basket-stat-{{ b.id }}">
+            {% if b.peak_pnl is not none %}
+            <span class="stat-chip stat-chip-peak" title="High-water mark P&L since last rearm">
+                Peak&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.peak_pnl) }}</span>
+            </span>
+            {% endif %}
+            {% if b.ps_floor is not none %}
+            <span class="stat-chip stat-chip-floor" title="Profit Shield live floor">
+                PS&nbsp;Floor&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.ps_floor) }}</span>
+            </span>
+            {% endif %}
+        </div>
         <button class="btn-sm btn-edit" onclick="event.stopPropagation(); openBasketEdit({{ b.id }})">Edit</button>
         <span class="chevron" id="chevron-{{ b.id }}">›</span>
     </div>
@@ -362,6 +374,23 @@
                         </label>
                         <input type="hidden" name="enabled" id="eod-enabled-{{ b.id }}"
                                value="{{ '1' if b.rm.get('eod_exit') else '0' }}">
+                    </div>
+                </form>
+
+                <form method="post" action="/baskets/{{ b.id }}/rm/delete-on-fire" class="rm-eod-form">
+                    <div class="rm-eod-row">
+                        <div class="rm-eod-label">
+                            <span class="rm-eod-title">Delete Basket on Fire</span>
+                            <span class="rm-eod-hint">Removes basket automatically after exit</span>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" name="dof_checkbox" id="dof-toggle-{{ b.id }}"
+                                   {{ 'checked' if b.rm.get('delete_on_fire', 1) else '' }}
+                                   onchange="submitDofToggle({{ b.id }}, this.checked)">
+                            <span class="toggle-track"></span>
+                        </label>
+                        <input type="hidden" name="enabled" id="dof-enabled-{{ b.id }}"
+                               value="{{ '1' if b.rm.get('delete_on_fire', 1) else '0' }}">
                     </div>
                 </form>
 
@@ -731,6 +760,15 @@ function submitEodToggle(basketId, enabled) {
     }
 }
 
+// ── Delete-on-fire toggle (auto-submits form) ─────────────────
+function submitDofToggle(basketId, enabled) {
+    const hidden = document.getElementById('dof-enabled-' + basketId);
+    if (hidden) {
+        hidden.value = enabled ? '1' : '0';
+        hidden.closest('form').submit();
+    }
+}
+
 // ── Live P&L polling (no flash) ───────────────────────────────
 function istNow() {
     const now = new Date();
@@ -769,13 +807,23 @@ function updatePnl(data) {
             }
         });
     }
-    // Basket header P&L
+    // Basket header P&L + stat chips
     for (const [id, b] of Object.entries(data.baskets)) {
         const el = document.getElementById('basket-pnl-' + id);
-        if (!el) continue;
-        const s  = b.pnl     >= 0 ? 'profit'     : 'loss';
-        const ps = b.pnl_pct >= 0 ? 'pct-profit' : 'pct-loss';
-        el.innerHTML = `<span class="${s}">${fmtINR(b.pnl)}</span> <span class="pct-badge ${ps}">${fmtPct(b.pnl_pct)}</span>`;
+        if (el) {
+            const s  = b.pnl     >= 0 ? 'profit'     : 'loss';
+            const ps = b.pnl_pct >= 0 ? 'pct-profit' : 'pct-loss';
+            el.innerHTML = `<span class="${s}">${fmtINR(b.pnl)}</span> <span class="pct-badge ${ps}">${fmtPct(b.pnl_pct)}</span>`;
+        }
+        const sc = document.getElementById('basket-stat-' + id);
+        if (sc) {
+            let html = '';
+            if (b.peak_pnl != null)
+                html += `<span class="stat-chip stat-chip-peak" title="High-water mark P&L since last rearm">Peak&nbsp;<span class="profit">${fmtINR(b.peak_pnl)}</span></span>`;
+            if (b.ps_floor != null)
+                html += `<span class="stat-chip stat-chip-floor" title="Profit Shield live floor">PS&nbsp;Floor&nbsp;<span class="profit">${fmtINR(b.ps_floor)}</span></span>`;
+            sc.innerHTML = html;
+        }
     }
 }
 async function pollPnl() {

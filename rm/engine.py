@@ -59,6 +59,7 @@ def _fresh_state() -> dict:
         "fired":     False,  # True once exit orders are placed
         "pt_checks": 0,      # consecutive 5-sec checks above PT threshold
         "lg_checks": 0,      # consecutive 5-sec checks below LG threshold
+        "peak_pnl":  None,   # High-water mark P&L since last rearm
     }
 
 
@@ -115,6 +116,7 @@ async def _check_basket(
     exit_fn: Callable,
     ltp_fn: Callable[[int], float | None],
     no_ltp_fn: Callable[[], None] | None,
+    delete_basket_fn: Callable[[int], None] | None = None,
 ):
     """Evaluate one basket's RM rules for a single tick. Fires exit if needed.
     Runs concurrently with other baskets — one basket's long exit does not block others.
@@ -146,6 +148,10 @@ async def _check_basket(
             no_ltp_fn()
         return
 
+    # Track high-water mark P&L since last rearm
+    if state["peak_pnl"] is None or pnl > state["peak_pnl"]:
+        state["peak_pnl"] = pnl
+
     logger.debug(f"Basket {bid}: live P&L = ₹{pnl:,.0f}")
 
     def _spawn_fire(reason: str, is_eod: bool = False):
@@ -153,10 +159,14 @@ async def _check_basket(
         allowing the engine to keep evaluating other baskets without waiting for
         order placement (which can take 5-30 s for LIMIT orders).
         _fire() sets fired=True immediately on entry, so the next tick won't re-trigger.
-        pnl is captured from the enclosing scope — it's the live MTM at trigger time.
+        pnl and peak_pnl are captured from the enclosing scope at trigger time.
         """
         task = asyncio.create_task(
-            _fire(exit_fn, bid, positions, reason, basket, eod=is_eod, mtm_at_trigger=pnl)
+            _fire(exit_fn, bid, positions, reason, basket, eod=is_eod,
+                  mtm_at_trigger=pnl,
+                  peak_pnl=state.get("peak_pnl"),
+                  ps_floor=state.get("floor"),
+                  delete_basket_fn=delete_basket_fn)
         )
         _active_fires.add(task)
         task.add_done_callback(_active_fires.discard)
@@ -228,6 +238,7 @@ async def run_engine(
     get_baskets_fn: Callable,
     ltp_fn: Callable[[int], float | None],
     exit_fn: Callable[[int, list, str], None],
+    delete_basket_fn: Callable[[int], None] | None = None,
     no_ltp_fn: Callable[[], None] | None = None,
 ):
     """
@@ -260,16 +271,16 @@ async def run_engine(
         # Fire each basket check as an independent background task so one basket's
         # multi-second LIMIT exit does not delay RM evaluation for all other baskets.
         for b in baskets:
-            task = asyncio.create_task(_check_basket_safe(b, exit_fn, ltp_fn, no_ltp_fn))
+            task = asyncio.create_task(_check_basket_safe(b, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn))
             _active_fires.add(task)
             task.add_done_callback(_active_fires.discard)
 
 
-async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn):
+async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn=None):
     """Wrapper that catches all exceptions so a failed basket check never silently
     kills the background task without a traceback."""
     try:
-        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn)
+        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn)
     except asyncio.CancelledError:
         raise
     except Exception as e:
@@ -277,8 +288,18 @@ async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn):
 
 
 async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False,
-               mtm_at_trigger: float | None = None):
-    logger.info(f"Basket {basket_id}: FIRING EXIT — {reason} | MTM=₹{mtm_at_trigger:,.0f}" if mtm_at_trigger is not None else f"Basket {basket_id}: FIRING EXIT — {reason}")
+               mtm_at_trigger: float | None = None,
+               peak_pnl: float | None = None,
+               ps_floor: float | None = None,
+               delete_basket_fn: Callable[[int], None] | None = None):
+    parts = [f"Basket {basket_id}: FIRING EXIT — {reason}"]
+    if mtm_at_trigger is not None:
+        parts.append(f"MTM=₹{mtm_at_trigger:,.0f}")
+    if peak_pnl is not None:
+        parts.append(f"Peak=₹{peak_pnl:,.0f}")
+    if ps_floor is not None:
+        parts.append(f"PSFloor=₹{ps_floor:,.0f}")
+    logger.info(" | ".join(parts))
 
     # Set fired=True immediately — prevents the next engine tick from re-triggering
     # this basket while order placement is in progress (which can take 5-30 seconds
@@ -295,7 +316,7 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
         event_id = await asyncio.to_thread(
             create_exit_event,
             basket_id, basket_name, triggered_at, reason, order_type, rm_snapshot,
-            mtm_at_trigger,
+            mtm_at_trigger, peak_pnl, ps_floor,
         )
     except Exception as e:
         logger.error(f"Basket {basket_id}: failed to create exit event log: {e}")
@@ -334,3 +355,11 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
     current["fired"] = True
     if exit_succeeded:
         logger.info(f"Basket {basket_id}: exit confirmed, fired=True")
+        rm = basket.get("rm") or {}
+        if delete_basket_fn and rm.get("delete_on_fire", 1):
+            try:
+                await delete_basket_fn(basket_id)
+                _state.pop(basket_id, None)
+                logger.info(f"Basket {basket_id}: deleted after RM fire (delete_on_fire=True)")
+            except Exception as e:
+                logger.error(f"Basket {basket_id}: delete after fire failed: {e}")

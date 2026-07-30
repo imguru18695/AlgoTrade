@@ -82,6 +82,15 @@ async def save_order_type(basket_id: int, order_type: str = Form(...)):
     return RedirectResponse(url="/", status_code=302)
 
 
+@router.post("/{basket_id}/rm/delete-on-fire")
+async def save_delete_on_fire(
+    basket_id: int,
+    enabled: Optional[str] = Form(default=None),
+):
+    service.save_delete_on_fire(basket_id, enabled == "1")
+    return RedirectResponse(url="/", status_code=302)
+
+
 @router.post("/{basket_id}/rm/eod-exit")
 async def save_eod_exit(
     basket_id: int,

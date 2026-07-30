@@ -29,6 +29,7 @@ def init_db():
         for migration in [
             "ALTER TABLE basket_rm ADD COLUMN eod_exit INTEGER DEFAULT 0",
             "ALTER TABLE baskets ADD COLUMN order_type TEXT DEFAULT 'LIMIT'",
+            "ALTER TABLE basket_rm ADD COLUMN delete_on_fire INTEGER DEFAULT 1",
         ]:
             try:
                 conn.execute(migration)
@@ -40,6 +41,8 @@ def init_db():
         for migration in [
             "ALTER TABLE exit_events ADD COLUMN order_type TEXT DEFAULT 'LIMIT'",
             "ALTER TABLE exit_events ADD COLUMN mtm_at_trigger REAL",
+            "ALTER TABLE exit_events ADD COLUMN peak_pnl REAL",
+            "ALTER TABLE exit_events ADD COLUMN ps_floor_at_trigger REAL",
         ]:
             try:
                 conn.execute(migration)
@@ -54,9 +57,11 @@ def init_db():
                 basket_name     TEXT NOT NULL,
                 triggered_at    TEXT NOT NULL,
                 trigger_reason  TEXT NOT NULL,
-                order_type      TEXT NOT NULL DEFAULT 'LIMIT',
-                rm_snapshot     TEXT NOT NULL,
-                mtm_at_trigger  REAL
+                order_type          TEXT NOT NULL DEFAULT 'LIMIT',
+                rm_snapshot         TEXT NOT NULL,
+                mtm_at_trigger      REAL,
+                peak_pnl            REAL,
+                ps_floor_at_trigger REAL
             );
 
             CREATE TABLE IF NOT EXISTS exit_orders (
@@ -108,7 +113,9 @@ def init_db():
                 ps_step_profit  REAL,
                 ps_step_lock    REAL,
                 -- EOD auto-exit
-                eod_exit        INTEGER DEFAULT 0
+                eod_exit        INTEGER DEFAULT 0,
+                -- Auto-delete basket after RM fires
+                delete_on_fire  INTEGER DEFAULT 1
             );
         """)
         conn.commit()

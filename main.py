@@ -13,7 +13,7 @@ from auth.routes import router as auth_router
 from auth.token_store import load_token, load_user_id
 from baskets.routes import router as baskets_router
 from logs.routes import router as logs_router
-from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type
+from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type, delete_basket
 from kite.client import get_kite
 from kite.positions import fetch_positions
 from kite import ticker
@@ -143,7 +143,10 @@ async def _refresh_cache():
             rm.get("pt_active") or rm.get("lg_active") or
             rm.get("ps_active") or rm.get("eod_exit")
         )
-        b["fired"]      = get_basket_state(b["id"]).get("fired", False)
+        state           = get_basket_state(b["id"])
+        b["fired"]      = state.get("fired", False)
+        b["peak_pnl"]   = state.get("peak_pnl")
+        b["ps_floor"]   = state.get("floor") if state.get("ps_armed") else None
 
     _basket_cache        = baskets
     _all_positions_cache = positions
@@ -181,10 +184,14 @@ async def lifespan(app: FastAPI):
         task.add_done_callback(_background_tasks.discard)
 
     _keep(asyncio.create_task(_refresh_loop()))
+    async def _delete_basket_fn(basket_id: int):
+        await asyncio.to_thread(delete_basket, basket_id)
+
     _keep(asyncio.create_task(run_engine(
         get_baskets_fn=_get_baskets_for_engine,
         ltp_fn=ticker.get_ltp,
         exit_fn=_exit_fn,
+        delete_basket_fn=_delete_basket_fn,
         no_ltp_fn=lambda: logging.warning("RM engine: no live prices available."),
     )))
     yield
@@ -296,6 +303,12 @@ async def get_pnl():
             for p in b.get("positions", [])
         )
         basket_pnl_pct = (basket_pnl / basket_cost * 100) if basket_cost else 0.0
-        baskets_data[str(b["id"])] = {"pnl": basket_pnl, "pnl_pct": basket_pnl_pct}
+        state = get_basket_state(b["id"])
+        baskets_data[str(b["id"])] = {
+            "pnl":      basket_pnl,
+            "pnl_pct":  basket_pnl_pct,
+            "peak_pnl": state.get("peak_pnl"),
+            "ps_floor": state.get("floor") if state.get("ps_armed") else None,
+        }
 
     return JSONResponse({"total_pnl": total_pnl, "positions": positions_data, "baskets": baskets_data})

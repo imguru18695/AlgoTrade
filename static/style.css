@@ -473,6 +473,28 @@ main {
 .pct-profit { background: rgba(0,208,132,0.12); color: var(--profit); }
 .pct-loss   { background: rgba(255,77,106,0.12); color: var(--loss); }
 
+/* ── Basket stat chips (Peak P&L, PS Floor) ───────────────────── */
+.basket-stat-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.stat-chip {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.stat-chip span { font-weight: 700; }
+.stat-chip-peak  { border-color: rgba(0,200,150,0.3); }
+.stat-chip-floor { border-color: rgba(255,180,0,0.35); }
+
 /* ── Basket P&L cell ──────────────────────────────────────────── */
 .basket-pnl {
     font-weight: 700;

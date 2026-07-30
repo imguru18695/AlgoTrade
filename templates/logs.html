@@ -281,6 +281,20 @@
                     </span>
                 </div>
                 {% endif %}
+                {% if ev.peak_pnl is not none %}
+                <div class="event-meta-item">Peak P&L
+                    <span style="color:var(--profit)">
+                        {{ '+' if ev.peak_pnl >= 0 else '' }}₹{{ "{:,.0f}".format(ev.peak_pnl) }}
+                    </span>
+                </div>
+                {% endif %}
+                {% if ev.ps_floor_at_trigger is not none %}
+                <div class="event-meta-item">PS Floor at trigger
+                    <span style="color:var(--warn)">
+                        ₹{{ "{:,.0f}".format(ev.ps_floor_at_trigger) }}
+                    </span>
+                </div>
+                {% endif %}
             </div>
         </div>
         <div>
