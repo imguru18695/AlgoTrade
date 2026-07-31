@@ -13,16 +13,19 @@ def create_exit_event(
     order_type: str,
     rm_snapshot: dict,
     mtm_at_trigger: float | None = None,
+    peak_pnl: float | None = None,
+    ps_floor_at_trigger: float | None = None,
 ) -> int:
     with get_conn() as conn:
         cur = conn.execute(
             """
             INSERT INTO exit_events
-                (basket_id, basket_name, triggered_at, trigger_reason, order_type, rm_snapshot, mtm_at_trigger)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (basket_id, basket_name, triggered_at, trigger_reason, order_type, rm_snapshot,
+                 mtm_at_trigger, peak_pnl, ps_floor_at_trigger)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (basket_id, basket_name, triggered_at, trigger_reason, order_type,
-             json.dumps(rm_snapshot), mtm_at_trigger),
+             json.dumps(rm_snapshot), mtm_at_trigger, peak_pnl, ps_floor_at_trigger),
         )
         conn.commit()
         return cur.lastrowid
