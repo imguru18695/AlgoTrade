@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 IST            = timezone(timedelta(hours=5, minutes=30))
 MARKET_OPEN    = (9, 15)
 MARKET_CLOSE   = (15, 29)  # stop ticks at 15:29 — NSE rejects orders at/after 15:30
-EOD_EXIT_TIME  = (15, 25)
+EOD_EXIT_TIME  = (15, 10)
 CHECK_INTERVAL = 1  # seconds
 
 # Per-basket intraday state — auto-resets each new trading day
