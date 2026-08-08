@@ -60,6 +60,7 @@ def _fresh_state() -> dict:
         "pt_checks": 0,      # consecutive 5-sec checks above PT threshold
         "lg_checks": 0,      # consecutive 5-sec checks below LG threshold
         "peak_pnl":  None,   # High-water mark P&L since last rearm
+        "event_id":  None,   # exit_events row id — reused on retries to avoid duplicate log entries
     }
 
 
@@ -307,20 +308,28 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
     current = _state.setdefault(basket_id, _fresh_state())
     current["fired"] = True
 
-    try:
-        from logs.service import create_exit_event
-        basket_name = basket.get("name", f"Basket {basket_id}")
-        rm_snapshot = basket.get("rm") or {}
-        order_type  = basket.get("order_type", "LIMIT")
-        triggered_at = datetime.now(IST).isoformat()
-        event_id = await asyncio.to_thread(
-            create_exit_event,
-            basket_id, basket_name, triggered_at, reason, order_type, rm_snapshot,
-            mtm_at_trigger, peak_pnl, ps_floor,
-        )
-    except Exception as e:
-        logger.error(f"Basket {basket_id}: failed to create exit event log: {e}")
-        event_id = None
+    # Reuse existing event_id on retries — only create a new exit event on the
+    # first fire, not on every retry after a failed order placement.
+    existing_event_id = current.get("event_id")
+    if existing_event_id:
+        event_id = existing_event_id
+        logger.info(f"Basket {basket_id}: retrying exit, reusing event_id={event_id}")
+    else:
+        try:
+            from logs.service import create_exit_event
+            basket_name = basket.get("name", f"Basket {basket_id}")
+            rm_snapshot = basket.get("rm") or {}
+            order_type  = basket.get("order_type", "LIMIT")
+            triggered_at = datetime.now(IST).isoformat()
+            event_id = await asyncio.to_thread(
+                create_exit_event,
+                basket_id, basket_name, triggered_at, reason, order_type, rm_snapshot,
+                mtm_at_trigger, peak_pnl, ps_floor,
+            )
+            current["event_id"] = event_id
+        except Exception as e:
+            logger.error(f"Basket {basket_id}: failed to create exit event log: {e}")
+            event_id = None
 
     exit_succeeded = True
     try:

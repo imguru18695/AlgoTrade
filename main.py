@@ -186,6 +186,10 @@ async def lifespan(app: FastAPI):
     _keep(asyncio.create_task(_refresh_loop()))
     async def _delete_basket_fn(basket_id: int):
         await asyncio.to_thread(delete_basket, basket_id)
+        # Evict from cache immediately so the engine doesn't re-trigger
+        # on the stale basket before the next 60-second refresh.
+        global _basket_cache
+        _basket_cache = [b for b in _basket_cache if b["id"] != basket_id]
 
     _keep(asyncio.create_task(run_engine(
         get_baskets_fn=_get_baskets_for_engine,
