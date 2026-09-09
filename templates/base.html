@@ -5,16 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlgoPlatform</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=16">
+    <link rel="stylesheet" href="/static/style.css?v=17">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body>
     <header class="app-header">
-        <span class="logo">AlgoPlatform</span>
+        <div class="header-left">
+            <span class="logo">AlgoPlatform</span>
+            <span class="market-status" id="market-status-badge">—</span>
+        </div>
         <nav>
             {% if user_id %}
             <span class="user-id">{{ user_id }}</span>
             {% endif %}
+            <span class="header-clock" id="header-clock"></span>
             <button class="btn-ghost btn-refresh" id="refresh-btn" onclick="manualRefresh(this)">⟳ Refresh</button>
             <a href="/logs" class="btn-ghost">Logs</a>
             <a href="/auth/logout" class="btn-ghost">Logout</a>
@@ -29,6 +33,46 @@
         btn.textContent = '⟳ Refreshing…';
         location.reload();
     }
+
+    // ── IST clock + market status ─────────────────────────────────
+    function istNow() {
+        const now = new Date();
+        const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+        return new Date(utc + 5.5 * 3600000);
+    }
+    function isMarketOpen(ist) {
+        const h = ist.getHours(), m = ist.getMinutes();
+        const mins = h * 60 + m;
+        return mins >= 9 * 60 + 15 && mins < 15 * 60 + 30;
+    }
+    function isPreMarket(ist) {
+        const h = ist.getHours(), m = ist.getMinutes();
+        const mins = h * 60 + m;
+        return mins >= 9 * 60 && mins < 9 * 60 + 15;
+    }
+    function tickClock() {
+        const ist = istNow();
+        const hh = String(ist.getHours()).padStart(2,'0');
+        const mm = String(ist.getMinutes()).padStart(2,'0');
+        const ss = String(ist.getSeconds()).padStart(2,'0');
+        const clockEl = document.getElementById('header-clock');
+        const statusEl = document.getElementById('market-status-badge');
+        if (clockEl) clockEl.textContent = `${hh}:${mm}:${ss} IST`;
+        if (statusEl) {
+            if (isMarketOpen(ist)) {
+                statusEl.textContent = '● OPEN';
+                statusEl.className = 'market-status market-open';
+            } else if (isPreMarket(ist)) {
+                statusEl.textContent = '◑ PRE';
+                statusEl.className = 'market-status market-pre';
+            } else {
+                statusEl.textContent = '○ CLOSED';
+                statusEl.className = 'market-status market-closed';
+            }
+        }
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
     </script>
 </body>
 </html>

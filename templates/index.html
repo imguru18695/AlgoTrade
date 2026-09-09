@@ -3,9 +3,17 @@
 
 <!-- KPI Bar -->
 <div class="kpi-bar">
+    <div class="kpi kpi-main {% if total_pnl < 0 %}kpi-loss{% else %}kpi-profit{% endif %}" id="kpi-total-pnl-card">
+        <span class="kpi-value" id="kpi-total-pnl">{{ "₹{:,.0f}".format(total_pnl) }}</span>
+        <span class="kpi-label">Total MTM P&amp;L</span>
+    </div>
     <div class="kpi">
         <span class="kpi-value">{{ active_baskets_count }}</span>
         <span class="kpi-label">Active Baskets</span>
+    </div>
+    <div class="kpi">
+        <span class="kpi-value">{{ positions|length }}</span>
+        <span class="kpi-label">Open Positions</span>
     </div>
     <div class="kpi {% if baskets_without_rm_count > 0 %}kpi-warn{% endif %}">
         <span class="kpi-value">
@@ -13,17 +21,10 @@
         </span>
         <span class="kpi-label">No RM Setup</span>
     </div>
-    <div class="kpi {% if total_pnl < 0 %}kpi-loss{% else %}kpi-profit{% endif %}" id="kpi-total-pnl-card">
-        <span class="kpi-value" id="kpi-total-pnl">{{ "₹{:,.0f}".format(total_pnl) }}</span>
-        <span class="kpi-label">Total MTM P&L</span>
-    </div>
-    <div class="kpi">
-        <span class="kpi-value">{{ positions|length }}</span>
-        <span class="kpi-label">Open Positions</span>
-    </div>
 </div>
 
-<!-- Unallocated Section -->
+<!-- Unallocated Section — hidden when empty -->
+{% if unallocated %}
 <section class="section">
     <div class="section-header">
         <h2>Unallocated <span class="badge">{{ unallocated|length }}</span></h2>
@@ -32,7 +33,6 @@
                 onclick="openBulkAllocModal()">Allocate Selected</button>
     </div>
 
-    {% if unallocated %}
     <table class="positions-table">
         <thead>
             <tr>
@@ -45,7 +45,7 @@
                 <th>Qty</th>
                 <th>Avg Price</th>
                 <th>LTP</th>
-                <th class="col-pnl">MTM P&L</th>
+                <th class="col-pnl">MTM P&amp;L</th>
             </tr>
         </thead>
         <tbody id="unalloc-tbody">
@@ -74,48 +74,62 @@
         {% endfor %}
         </tbody>
     </table>
-    {% else %}
-    <p class="empty-state">All positions are allocated to baskets.</p>
-    {% endif %}
 </section>
+{% endif %}
 
 <!-- Baskets -->
 {% for b in baskets %}
-<section class="section basket-card" id="basket-{{ b.id }}">
+{% set state_class = 'state-fired' if b.fired else ('state-rm-active' if b.rm_enabled else ('state-empty' if not b.positions else 'state-no-rm')) %}
+<section class="section basket-card {{ state_class }}" id="basket-{{ b.id }}">
     <div class="basket-header" onclick="toggleBasket({{ b.id }})">
-        <div class="basket-title">
-            <span class="basket-name">{{ b.name }}</span>
-            <span class="badge">{{ b.positions|length }} pos</span>
-            {% if b.fired %}
-            <span class="badge badge-fired">FIRED — Re-arm to re-enable RM</span>
-            {% endif %}
+
+        <!-- Left: name + RM status dots + stat chips -->
+        <div class="basket-info">
+            <div class="basket-name-row">
+                <span class="basket-name">{{ b.name }}</span>
+                {% if b.fired %}
+                <span class="badge badge-fired">FIRED</span>
+                {% endif %}
+                <div class="rm-dot-row">
+                    <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('pt_active') else '' }}" title="Profit Target">PT</span>
+                    <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('lg_active') else '' }}" title="Loss Guard">LG</span>
+                    <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('ps_active') else '' }}" title="Profit Shield">PS</span>
+                    <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('eod_exit') else '' }}" title="EOD Exit">EOD</span>
+                </div>
+            </div>
+            <div class="basket-stat-chips" id="basket-stat-{{ b.id }}">
+                {% if b.peak_pnl is not none %}
+                <span class="stat-chip stat-chip-peak" title="High-water mark P&L since last rearm">
+                    Peak&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.peak_pnl) }}</span>
+                </span>
+                {% endif %}
+                {% if b.ps_floor is not none %}
+                <span class="stat-chip stat-chip-floor" title="Profit Shield live floor">
+                    PS Floor&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.ps_floor) }}</span>
+                </span>
+                {% endif %}
+            </div>
         </div>
-        <div class="basket-meta">
-            <span class="rm-chip {{ 'rm-on' if b.rm.get('pt_active') else 'rm-off' }}">Profit Target</span>
-            <span class="rm-chip {{ 'rm-on' if b.rm.get('lg_active') else 'rm-off' }}">Loss Guard</span>
-            <span class="rm-chip {{ 'rm-on' if b.rm.get('ps_active') else 'rm-off' }}">Profit Shield</span>
-            <span class="rm-chip {{ 'rm-on' if b.rm.get('eod_exit') else 'rm-off' }}">EOD Exit</span>
+
+        <!-- Center: P&L -->
+        <div class="basket-pnl-area">
+            <div class="basket-pnl" id="basket-pnl-{{ b.id }}">
+                <span class="{{ 'profit' if b.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(b.pnl) }}</span>
+            </div>
+            <div class="basket-pnl-meta">
+                {% if b.positions %}
+                <span class="pct-badge {{ 'pct-profit' if b.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(b.pnl_pct) }}%</span>
+                {% endif %}
+                <span class="badge">{{ b.positions|length }} pos</span>
+            </div>
         </div>
-        <div class="basket-pnl" id="basket-pnl-{{ b.id }}">
-            <span class="{{ 'profit' if b.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(b.pnl) }}</span>
-            {% if b.positions %}
-            <span class="pct-badge {{ 'pct-profit' if b.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(b.pnl_pct) }}%</span>
-            {% endif %}
+
+        <!-- Right: actions -->
+        <div class="basket-actions">
+            <button class="btn-sm btn-edit" onclick="event.stopPropagation(); openBasketEdit({{ b.id }})">Edit</button>
+            <span class="chevron" id="chevron-{{ b.id }}">›</span>
         </div>
-        <div class="basket-stat-chips" id="basket-stat-{{ b.id }}">
-            {% if b.peak_pnl is not none %}
-            <span class="stat-chip stat-chip-peak" title="High-water mark P&L since last rearm">
-                Peak&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.peak_pnl) }}</span>
-            </span>
-            {% endif %}
-            {% if b.ps_floor is not none %}
-            <span class="stat-chip stat-chip-floor" title="Profit Shield live floor">
-                PS&nbsp;Floor&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.ps_floor) }}</span>
-            </span>
-            {% endif %}
-        </div>
-        <button class="btn-sm btn-edit" onclick="event.stopPropagation(); openBasketEdit({{ b.id }})">Edit</button>
-        <span class="chevron" id="chevron-{{ b.id }}">›</span>
+
     </div>
 
     <!-- Expanded edit panel -->
@@ -153,7 +167,7 @@
                             <th>Qty</th>
                             <th>Avg</th>
                             <th>LTP</th>
-                            <th class="col-pnl">P&L</th>
+                            <th class="col-pnl">P&amp;L</th>
                         </tr>
                     </thead>
                     <tbody id="basket-tbody-{{ b.id }}">
@@ -216,7 +230,7 @@
                             </div>
                             <div class="rm-fields" id="pt-fields-{{ b.id }}">
                                 <div class="rm-field">
-                                    <label>Target P&L (₹)</label>
+                                    <label>Target P&amp;L (₹)</label>
                                     <input type="number" name="inr" min="1" step="1"
                                            id="pt-inr-{{ b.id }}"
                                            value="{{ pt.get('pt_inr') or '' }}"
@@ -439,7 +453,6 @@
             <button class="tab-btn" onclick="switchTab('new')">New Basket</button>
         </div>
 
-        <!-- Existing basket form -->
         <form method="post" action="/baskets/assign" id="form-existing">
             <input type="hidden" name="tradingsymbol" id="m-symbol">
             <input type="hidden" name="exchange" id="m-exchange">
@@ -453,7 +466,6 @@
             <button type="submit" class="btn-primary" style="margin-top:16px;width:100%">Allocate</button>
         </form>
 
-        <!-- New basket form -->
         <form method="post" action="/baskets/new-and-assign" id="form-new" style="display:none">
             <input type="hidden" name="tradingsymbol" id="mn-symbol">
             <input type="hidden" name="exchange" id="mn-exchange">
@@ -467,7 +479,7 @@
     </div>
 </div>
 
-<!-- Bulk Allocate Modal (multiple positions) -->
+<!-- Bulk Allocate Modal -->
 <div id="bulk-alloc-modal" class="modal-backdrop" style="display:none" onclick="closeBulkModal(event)">
     <div class="modal">
         <h3>Allocate Selected</h3>
@@ -498,7 +510,7 @@
     </div>
 </div>
 
-<!-- Hidden bulk-unallocate form (submitted via JS) -->
+<!-- Hidden bulk-unallocate form -->
 <form id="bulk-unalloc-form" method="post" action="/baskets/unassign-bulk" style="display:none">
     <div id="bulk-unalloc-inputs"></div>
 </form>
@@ -513,14 +525,12 @@
 <script>
 window.__DEMO_MODE__ = {{ demo_mode | default(false) | tojson }};
 
-// Basket RM active flags — keyed by basket id (string)
 window.__BASKET_RM__ = {
 {% for b in baskets %}  "{{ b.id }}": {{ 'true' if b.rm_enabled else 'false' }}{% if not loop.last %},{% endif %}
 
 {% endfor %}};
 
 function showRMError(anchorEl, msg) {
-    // Remove any existing error near this anchor
     const existing = anchorEl.parentElement.querySelector('.rm-guard-err');
     if (existing) existing.remove();
     const err = document.createElement('p');
@@ -681,9 +691,8 @@ function toggleRM(prefix, basketId, active) {
     }
 }
 
-// Apply disabled state from saved values on page load
 document.querySelectorAll('.toggle input[type="checkbox"]').forEach(cb => {
-    const parts = cb.id.split('-');  // e.g. ['pt','toggle','1']
+    const parts = cb.id.split('-');
     const prefix = parts[0];
     const basketId = parts[2];
     toggleRM(prefix, basketId, cb.checked);
@@ -751,7 +760,7 @@ function validatePS(basketId) {
     return true;
 }
 
-// ── EOD toggle (auto-submits form) ───────────────────────────
+// ── EOD toggle ───────────────────────────────────────────────
 function submitEodToggle(basketId, enabled) {
     const hidden = document.getElementById('eod-enabled-' + basketId);
     if (hidden) {
@@ -760,7 +769,7 @@ function submitEodToggle(basketId, enabled) {
     }
 }
 
-// ── Delete-on-fire toggle (auto-submits form) ─────────────────
+// ── Delete-on-fire toggle ─────────────────────────────────────
 function submitDofToggle(basketId, enabled) {
     const hidden = document.getElementById('dof-enabled-' + basketId);
     if (hidden) {
@@ -769,7 +778,7 @@ function submitDofToggle(basketId, enabled) {
     }
 }
 
-// ── Live P&L polling (no flash) ───────────────────────────────
+// ── Live P&L polling ──────────────────────────────────────────
 function istNow() {
     const now = new Date();
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -792,9 +801,9 @@ function updatePnl(data) {
     const kpiVal  = document.getElementById('kpi-total-pnl');
     if (kpiVal) {
         kpiVal.textContent = fmtINR(data.total_pnl);
-        kpiCard.className  = 'kpi ' + (data.total_pnl < 0 ? 'kpi-loss' : 'kpi-profit');
+        kpiCard.className  = 'kpi kpi-main ' + (data.total_pnl < 0 ? 'kpi-loss' : 'kpi-profit');
     }
-    // Position rows (both unallocated and basket tables share the same key)
+    // Position rows
     for (const [key, pos] of Object.entries(data.positions)) {
         document.querySelectorAll(`tr[data-pos-key="${key}"]`).forEach(row => {
             const ltpCell = row.querySelector('.col-ltp');
@@ -811,9 +820,17 @@ function updatePnl(data) {
     for (const [id, b] of Object.entries(data.baskets)) {
         const el = document.getElementById('basket-pnl-' + id);
         if (el) {
-            const s  = b.pnl     >= 0 ? 'profit'     : 'loss';
+            const s = b.pnl >= 0 ? 'profit' : 'loss';
             const ps = b.pnl_pct >= 0 ? 'pct-profit' : 'pct-loss';
-            el.innerHTML = `<span class="${s}">${fmtINR(b.pnl)}</span> <span class="pct-badge ${ps}">${fmtPct(b.pnl_pct)}</span>`;
+            // Update pnl number
+            el.innerHTML = `<span class="${s}">${fmtINR(b.pnl)}</span>`;
+            // Update meta row (pct + pos count badge preserved via parent)
+            const metaEl = el.nextElementSibling;
+            if (metaEl && metaEl.classList.contains('basket-pnl-meta')) {
+                const badge = metaEl.querySelector('.badge');
+                metaEl.innerHTML = `<span class="pct-badge ${ps}">${fmtPct(b.pnl_pct)}</span>`;
+                if (badge) metaEl.appendChild(badge);
+            }
         }
         const sc = document.getElementById('basket-stat-' + id);
         if (sc) {
@@ -821,7 +838,7 @@ function updatePnl(data) {
             if (b.peak_pnl != null)
                 html += `<span class="stat-chip stat-chip-peak" title="High-water mark P&L since last rearm">Peak&nbsp;<span class="profit">${fmtINR(b.peak_pnl)}</span></span>`;
             if (b.ps_floor != null)
-                html += `<span class="stat-chip stat-chip-floor" title="Profit Shield live floor">PS&nbsp;Floor&nbsp;<span class="profit">${fmtINR(b.ps_floor)}</span></span>`;
+                html += `<span class="stat-chip stat-chip-floor" title="Profit Shield live floor">PS Floor&nbsp;<span class="profit">${fmtINR(b.ps_floor)}</span></span>`;
             sc.innerHTML = html;
         }
     }
