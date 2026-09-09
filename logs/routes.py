@@ -38,6 +38,7 @@ async def logs_page(
         "from_date":    effective_from,
         "to_date":      effective_to,
         "user_id":      load_user_id(),
+        "active_page":  "logs",
     })
 
 

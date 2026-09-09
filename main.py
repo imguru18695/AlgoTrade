@@ -217,28 +217,26 @@ app.include_router(logs_router)
 templates = Jinja2Templates(directory="templates")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def _page_context(request: Request) -> dict | None:
+    """Shared context builder for dashboard and management pages.
+    Returns None and sets a redirect if auth fails."""
     if not load_token():
-        return RedirectResponse(url="/auth/login")
-
-    # Refresh cache on page load — gives the browser a fully-current view and
-    # keeps engine data fresh while a user is actively monitoring.
+        return None
     try:
         await _refresh_cache()
     except Exception as e:
         logging.error(f"Page load cache refresh failed: {e}")
         if not _all_positions_cache and not _basket_cache:
-            return RedirectResponse(url="/auth/login")
+            return None
 
     positions   = _all_positions_cache
     baskets     = _basket_cache
     unallocated = _unallocated_cache
 
-    active_baskets      = [b for b in baskets if len(b["positions"]) > 0]
-    baskets_without_rm  = [b for b in active_baskets if not b["rm_enabled"]]
+    active_baskets     = [b for b in baskets if len(b["positions"]) > 0]
+    baskets_without_rm = [b for b in active_baskets if not b["rm_enabled"]]
 
-    return templates.TemplateResponse("index.html", {
+    return {
         "request":                  request,
         "positions":                positions,
         "unallocated":              unallocated,
@@ -247,7 +245,25 @@ async def index(request: Request):
         "baskets_without_rm_count": len(baskets_without_rm),
         "total_pnl":                sum(p["pnl"] for p in positions),
         "user_id":                  load_user_id(),
-    })
+    }
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    ctx = await _page_context(request)
+    if ctx is None:
+        return RedirectResponse(url="/auth/login")
+    ctx["active_page"] = "dashboard"
+    return templates.TemplateResponse("dashboard.html", ctx)
+
+
+@app.get("/management", response_class=HTMLResponse)
+async def management(request: Request):
+    ctx = await _page_context(request)
+    if ctx is None:
+        return RedirectResponse(url="/auth/login")
+    ctx["active_page"] = "management"
+    return templates.TemplateResponse("management.html", ctx)
 
 
 @app.get("/debug/positions")

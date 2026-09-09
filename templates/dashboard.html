@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ── Dashboard overview ─────────────────────────────────────── */
+.dash-hero {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 28px;
+}
+
+.hero-pnl {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid transparent;
+    border-radius: var(--radius);
+    padding: 28px 28px 24px;
+    backdrop-filter: blur(12px);
+    position: relative;
+    overflow: hidden;
+}
+.hero-pnl::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent);
+}
+.hero-pnl.hero-profit { border-left-color: var(--profit); }
+.hero-pnl.hero-loss   { border-left-color: var(--loss); }
+
+.hero-amount {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+.hero-profit .hero-amount { color: var(--profit); }
+.hero-loss   .hero-amount { color: var(--loss); }
+
+.hero-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+}
+
+.dash-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 22px 18px;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.2s;
+}
+.dash-stat:hover { border-color: var(--border-hov); }
+.dash-stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.dash-stat-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-top: 6px;
+}
+.dash-stat-warn .dash-stat-value { color: var(--warn); }
+
+/* ── Basket summary grid ────────────────────────────────────── */
+.basket-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+}
+
+.basket-summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    cursor: default;
+}
+.basket-summary-card:hover {
+    border-color: var(--border-hov);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+}
+
+/* State borders */
+.bsc-rm-active  { border-left-color: rgba(0,201,122,0.55); }
+.bsc-fired      { border-left-color: rgba(255,64,96,0.7); background: rgba(255,64,96,0.015); }
+.bsc-no-rm      { border-left-color: rgba(240,165,0,0.4); }
+.bsc-empty      { border-left-color: var(--border); opacity: 0.65; }
+
+.bsc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.bsc-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    color: var(--text);
+}
+
+.bsc-rm-dots {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.bsc-pnl {
+    text-align: right;
+}
+
+.bsc-pnl-amount {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.8px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.bsc-pnl-pct {
+    margin-top: 3px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    align-items: center;
+}
+
+.bsc-chips {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.bsc-positions {
+    font-size: 10.5px;
+    color: var(--text-3);
+    font-weight: 500;
+    margin-top: 8px;
+}
+
+.bsc-pos-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+}
+.bsc-pos-row:last-child { border-bottom: none; }
+
+.bsc-sym {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 11px;
+    letter-spacing: -0.1px;
+}
+
+.bsc-fired-banner {
+    background: rgba(255,64,96,0.08);
+    border: 1px solid rgba(255,64,96,0.2);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--loss);
+    text-align: center;
+    margin-top: 10px;
+    letter-spacing: 0.04em;
+}
+
+/* ── Section label ──────────────────────────────────────────── */
+.dash-section-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* ── Empty dashboard ────────────────────────────────────────── */
+.dash-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-3);
+}
+.dash-empty-icon { font-size: 40px; margin-bottom: 12px; }
+.dash-empty p { font-size: 13px; margin-top: 8px; }
+.dash-empty a { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 820px) {
+    .dash-hero { grid-template-columns: repeat(2,1fr); }
+    .hero-pnl { grid-column: span 2; }
+    .hero-amount { font-size: 34px; }
+    .basket-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+<!-- Hero KPI row -->
+<div class="dash-hero">
+    <div class="hero-pnl {% if total_pnl >= 0 %}hero-profit{% else %}hero-loss{% endif %}" id="dash-total-pnl-card">
+        <div class="hero-amount" id="dash-total-pnl">{{ "₹{:,.0f}".format(total_pnl) }}</div>
+        <div class="hero-label">Total MTM P&amp;L</div>
+    </div>
+    <div class="dash-stat">
+        <div class="dash-stat-value">{{ active_baskets_count }}</div>
+        <div class="dash-stat-label">Active Baskets</div>
+    </div>
+    <div class="dash-stat">
+        <div class="dash-stat-value">{{ positions|length }}</div>
+        <div class="dash-stat-label">Open Positions</div>
+    </div>
+    <div class="dash-stat {% if baskets_without_rm_count > 0 %}dash-stat-warn{% endif %}">
+        <div class="dash-stat-value">{{ baskets_without_rm_count }}</div>
+        <div class="dash-stat-label">No RM Setup</div>
+    </div>
+</div>
+
+<!-- Basket summary grid -->
+{% if baskets %}
+<div class="dash-section-label">Baskets</div>
+<div class="basket-grid" id="dash-basket-grid">
+{% for b in baskets %}
+{% set state_class = 'bsc-fired' if b.fired else ('bsc-rm-active' if b.rm_enabled else ('bsc-empty' if not b.positions else 'bsc-no-rm')) %}
+<div class="basket-summary-card {{ state_class }}" id="bsc-{{ b.id }}">
+    <div class="bsc-top">
+        <div>
+            <div class="bsc-name">{{ b.name }}</div>
+            <div class="bsc-rm-dots">
+                <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('pt_active') else '' }}" title="Profit Target">PT</span>
+                <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('lg_active') else '' }}" title="Loss Guard">LG</span>
+                <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('ps_active') else '' }}" title="Profit Shield">PS</span>
+                <span class="rm-dot {{ 'rm-dot-on' if b.rm.get('eod_exit') else '' }}" title="EOD Exit">EOD</span>
+            </div>
+        </div>
+        <div class="bsc-pnl" id="bsc-pnl-{{ b.id }}">
+            <div class="bsc-pnl-amount {{ 'profit' if b.pnl >= 0 else 'loss' }}">{{ "₹{:,.0f}".format(b.pnl) }}</div>
+            <div class="bsc-pnl-pct">
+                {% if b.positions %}
+                <span class="pct-badge {{ 'pct-profit' if b.pnl_pct >= 0 else 'pct-loss' }}">{{ "%+.2f"|format(b.pnl_pct) }}%</span>
+                {% endif %}
+                <span class="badge">{{ b.positions|length }} pos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat chips -->
+    <div class="bsc-chips" id="bsc-stat-{{ b.id }}">
+        {% if b.peak_pnl is not none %}
+        <span class="stat-chip stat-chip-peak" title="High-water mark">Peak&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.peak_pnl) }}</span></span>
+        {% endif %}
+        {% if b.ps_floor is not none %}
+        <span class="stat-chip stat-chip-floor" title="PS live floor">PS Floor&nbsp;<span class="profit">{{ "₹{:,.0f}".format(b.ps_floor) }}</span></span>
+        {% endif %}
+        {% if not b.positions %}
+        <span style="font-size:11px;color:var(--text-3);">No positions assigned</span>
+        {% endif %}
+    </div>
+
+    <!-- Position rows -->
+    {% if b.positions %}
+    <div style="margin-top:10px;">
+        {% for p in b.positions %}
+        <div class="bsc-pos-row" data-pos-key="{{ p.tradingsymbol }}|{{ p.exchange }}|{{ p.product }}">
+            <div>
+                <span class="bsc-sym">{{ p.tradingsymbol }}</span>
+                <span class="{{ 'qty-buy' if p.quantity > 0 else 'qty-sell' }}" style="font-size:10.5px;margin-left:6px;">{{ "%+d"|format(p.quantity) }}</span>
+            </div>
+            <div style="text-align:right;font-variant-numeric:tabular-nums;">
+                <span class="col-ltp" style="font-size:11px;color:var(--text-2);">{{ "%.2f"|format(p.last_price) }}</span>
+                &nbsp;
+                <span class="{{ 'profit' if p.pnl >= 0 else 'loss' }}" style="font-size:12px;">{{ "₹{:,.0f}".format(p.pnl) }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if b.fired %}
+    <div class="bsc-fired-banner">⚡ EXIT FIRED — Re-arm in Management</div>
+    {% endif %}
+</div>
+{% endfor %}
+</div>
+
+{% else %}
+<div class="dash-empty">
+    <div class="dash-empty-icon">📊</div>
+    <p>No baskets yet. Go to <a href="/management">Management</a> to set up positions and baskets.</p>
+</div>
+{% endif %}
+
+<script>
+window.__DEMO_MODE__ = {{ demo_mode | default(false) | tojson }};
+
+function istNow() {
+    const now = new Date();
+    return new Date(now.getTime() + now.getTimezoneOffset()*60000 + 5.5*3600000);
+}
+function isMarketHours() {
+    const ist = istNow();
+    const h = ist.getHours(), m = ist.getMinutes();
+    return (h > 9 || (h === 9 && m >= 15)) && (h < 15 || (h === 15 && m < 30));
+}
+function fmtINR(v) { return '₹' + Math.round(v).toLocaleString('en-IN'); }
+function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
+
+function updateDash(data) {
+    // Total P&L
+    const card = document.getElementById('dash-total-pnl-card');
+    const val  = document.getElementById('dash-total-pnl');
+    if (val) {
+        val.textContent = fmtINR(data.total_pnl);
+        card.className  = 'hero-pnl ' + (data.total_pnl >= 0 ? 'hero-profit' : 'hero-loss');
+    }
+    // Per-position rows (LTP + P&L)
+    for (const [key, pos] of Object.entries(data.positions)) {
+        document.querySelectorAll(`[data-pos-key="${key}"]`).forEach(row => {
+            const ltpEl = row.querySelector('.col-ltp');
+            const s = pos.pnl >= 0 ? 'profit' : 'loss';
+            if (ltpEl) ltpEl.textContent = pos.ltp.toFixed(2);
+            const pnlEl = row.querySelectorAll('span').length > 2 ? row.querySelector('.profit, .loss') : null;
+            // update the last span (pnl)
+            const spans = row.querySelectorAll('div > span');
+            if (spans.length >= 2) {
+                const pnlSpan = spans[spans.length - 1];
+                pnlSpan.className = s;
+                pnlSpan.textContent = fmtINR(pos.pnl);
+            }
+        });
+    }
+    // Per-basket card P&L + stat chips
+    for (const [id, b] of Object.entries(data.baskets)) {
+        const pnlEl = document.getElementById('bsc-pnl-' + id);
+        if (pnlEl) {
+            const s  = b.pnl >= 0 ? 'profit' : 'loss';
+            const ps = b.pnl_pct >= 0 ? 'pct-profit' : 'pct-loss';
+            const amountEl = pnlEl.querySelector('.bsc-pnl-amount');
+            if (amountEl) { amountEl.className = 'bsc-pnl-amount ' + s; amountEl.textContent = fmtINR(b.pnl); }
+            const pctRow = pnlEl.querySelector('.bsc-pnl-pct');
+            if (pctRow) {
+                const badge = pctRow.querySelector('.badge');
+                pctRow.innerHTML = `<span class="pct-badge ${ps}">${fmtPct(b.pnl_pct)}</span>`;
+                if (badge) pctRow.appendChild(badge);
+            }
+        }
+        const sc = document.getElementById('bsc-stat-' + id);
+        if (sc) {
+            let html = '';
+            if (b.peak_pnl != null)
+                html += `<span class="stat-chip stat-chip-peak" title="High-water mark">Peak&nbsp;<span class="profit">${fmtINR(b.peak_pnl)}</span></span>`;
+            if (b.ps_floor != null)
+                html += `<span class="stat-chip stat-chip-floor" title="PS live floor">PS Floor&nbsp;<span class="profit">${fmtINR(b.ps_floor)}</span></span>`;
+            if (html) sc.innerHTML = html;
+        }
+    }
+}
+
+async function pollDash() {
+    if (window.__DEMO_MODE__ || !isMarketHours()) return;
+    try {
+        const r = await fetch('/pnl');
+        if (r.ok) updateDash(await r.json());
+    } catch(_) {}
+    setTimeout(pollDash, 5000);
+}
+setTimeout(pollDash, 5000);
+</script>
+{% endblock %}

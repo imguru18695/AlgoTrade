@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlgoPlatform</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=17">
+    <link rel="stylesheet" href="/static/style.css?v=18">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body>
@@ -14,16 +14,26 @@
             <span class="logo">AlgoPlatform</span>
             <span class="market-status" id="market-status-badge">—</span>
         </div>
-        <nav>
+        <nav class="header-nav">
+            <a href="/" class="nav-link {% if active_page == 'dashboard' %}nav-active{% endif %}">
+                <span class="nav-icon">◈</span> Dashboard
+            </a>
+            <a href="/management" class="nav-link {% if active_page == 'management' %}nav-active{% endif %}">
+                <span class="nav-icon">⊞</span> Management
+            </a>
+            <a href="/logs" class="nav-link {% if active_page == 'logs' %}nav-active{% endif %}">
+                <span class="nav-icon">≡</span> Logs
+            </a>
+        </nav>
+        <div class="header-right">
             {% if user_id %}
             <span class="user-id">{{ user_id }}</span>
             {% endif %}
             <span class="header-clock" id="header-clock"></span>
             <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
-            <button class="btn-ghost btn-refresh" id="refresh-btn" onclick="manualRefresh(this)">⟳ Refresh</button>
-            <a href="/logs" class="btn-ghost">Logs</a>
+            <button class="btn-ghost btn-refresh" id="refresh-btn" onclick="manualRefresh(this)">⟳</button>
             <a href="/auth/logout" class="btn-ghost">Logout</a>
-        </nav>
+        </div>
     </header>
     <main>
         {% block content %}{% endblock %}
@@ -43,7 +53,6 @@
         document.getElementById('theme-toggle').textContent = next === 'dark' ? '🌙' : '☀️';
     }
 
-    // Set correct icon on load
     window.addEventListener('DOMContentLoaded', function() {
         const theme = document.documentElement.getAttribute('data-theme') || 'dark';
         document.getElementById('theme-toggle').textContent = theme === 'dark' ? '🌙' : '☀️';
@@ -51,7 +60,7 @@
 
     function manualRefresh(btn) {
         btn.disabled = true;
-        btn.textContent = '⟳ Refreshing…';
+        btn.textContent = '⟳';
         location.reload();
     }
 
@@ -62,13 +71,11 @@
         return new Date(utc + 5.5 * 3600000);
     }
     function isMarketOpen(ist) {
-        const h = ist.getHours(), m = ist.getMinutes();
-        const mins = h * 60 + m;
+        const mins = ist.getHours() * 60 + ist.getMinutes();
         return mins >= 9 * 60 + 15 && mins < 15 * 60 + 30;
     }
     function isPreMarket(ist) {
-        const h = ist.getHours(), m = ist.getMinutes();
-        const mins = h * 60 + m;
+        const mins = ist.getHours() * 60 + ist.getMinutes();
         return mins >= 9 * 60 && mins < 9 * 60 + 15;
     }
     function tickClock() {
