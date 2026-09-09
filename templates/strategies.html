@@ -1,0 +1,536 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ── Strategies page ──────────────────────────────────────────────── */
+.strat-page { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+@media (max-width: 1100px) { .strat-page { grid-template-columns: 1fr; } }
+
+/* Config bar */
+.strat-config {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.cfg-group { display: flex; flex-direction: column; gap: 6px; }
+.cfg-group label {
+    font-size: 10.5px; font-weight: 700;
+    color: var(--text-2); text-transform: uppercase; letter-spacing: 0.07em;
+}
+.cfg-group select {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 13px; font-family: inherit; padding: 8px 12px;
+    min-width: 160px; cursor: pointer;
+}
+.cfg-group select:focus { outline: none; border-color: var(--accent); }
+
+/* Strategy mode tabs */
+.strat-modes {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 20px; margin-bottom: 16px;
+}
+.mode-btn {
+    padding: 7px 18px; border-radius: 20px; font-size: 12.5px;
+    font-weight: 600; font-family: inherit; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg2); color: var(--text-2);
+    transition: all 0.15s;
+}
+.mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mode-btn.active {
+    background: var(--accent-grad); border-color: transparent; color: #fff;
+}
+
+/* Option chain table */
+.chain-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+}
+.chain-header {
+    display: grid; grid-template-columns: 1fr 110px 1fr;
+    background: rgba(0,0,0,0.2); padding: 10px 0;
+    font-size: 10.5px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+}
+.chain-header .col-ce { padding-left: 16px; }
+.chain-header .col-strike { text-align: center; }
+.chain-header .col-pe { text-align: right; padding-right: 16px; }
+
+.chain-body { max-height: 540px; overflow-y: auto; }
+.chain-row {
+    display: grid; grid-template-columns: 1fr 110px 1fr;
+    border-bottom: 1px solid var(--border); cursor: pointer;
+    transition: background 0.1s;
+}
+.chain-row:last-child { border-bottom: none; }
+.chain-row.atm-row { background: rgba(124,58,237,0.08); }
+.chain-row:hover { background: var(--surface-hov); }
+.chain-row.sel-ce .ce-side { background: rgba(52,199,89,0.12); }
+.chain-row.sel-pe .pe-side { background: rgba(255,77,106,0.12); }
+
+.ce-side, .pe-side {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+}
+.pe-side { justify-content: flex-end; flex-direction: row-reverse; }
+
+.opt-ltp { font-size: 13px; font-weight: 700; min-width: 50px; font-variant-numeric: tabular-nums; }
+.opt-iv  { font-size: 11px; color: var(--text-2); min-width: 36px; font-variant-numeric: tabular-nums; }
+.opt-oi  { font-size: 10.5px; color: var(--text-3); min-width: 50px; font-variant-numeric: tabular-nums; }
+
+.ce-side .opt-ltp { color: var(--profit); }
+.pe-side .opt-ltp { color: var(--loss); }
+
+.strike-cell {
+    text-align: center; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 12.5px; font-weight: 700; color: var(--text);
+    padding: 6px 4px;
+}
+.atm-badge {
+    font-size: 9px; font-weight: 800; color: var(--accent);
+    letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* Spot / helper bar */
+.chain-info-bar {
+    display: flex; gap: 20px; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--text-2);
+}
+.spot-val { font-size: 14px; font-weight: 700; color: var(--text); }
+
+/* ── Right panel ──────────────────────────────────────────────────── */
+.strat-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    display: flex; flex-direction: column; gap: 16px;
+    align-self: start; position: sticky; top: 20px;
+}
+.panel-title {
+    font-size: 14px; font-weight: 700; color: var(--text);
+}
+.panel-hint { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+
+/* Legs list */
+.legs-list { display: flex; flex-direction: column; gap: 8px; }
+.leg-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    align-items: center; gap: 8px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 12px;
+}
+.leg-sym { font-size: 12px; font-weight: 600; }
+.leg-side-buy  { color: var(--profit); font-size: 11px; font-weight: 700; }
+.leg-side-sell { color: var(--loss);   font-size: 11px; font-weight: 700; }
+.leg-ltp { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.leg-remove {
+    background: none; border: none; color: var(--text-3);
+    cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
+}
+.leg-remove:hover { color: var(--loss); }
+
+/* Entry fields */
+.entry-fields { display: flex; flex-direction: column; gap: 10px; }
+.entry-field { display: flex; flex-direction: column; gap: 5px; }
+.entry-field label {
+    font-size: 10.5px; font-weight: 700; color: var(--text-2);
+    text-transform: uppercase; letter-spacing: 0.07em;
+}
+.entry-field input, .entry-field select {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 13px; font-family: inherit; padding: 8px 12px;
+}
+.entry-field input:focus, .entry-field select:focus {
+    outline: none; border-color: var(--accent);
+}
+.basket-select-group { display: flex; flex-direction: column; gap: 5px; }
+.new-basket-name { display: none; }
+.new-basket-name.show { display: block; }
+
+/* Execute button */
+.btn-execute {
+    width: 100%; padding: 12px; font-size: 14px; font-weight: 700;
+    background: var(--accent-grad); color: #fff; border: none;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+    letter-spacing: 0.02em;
+}
+.btn-execute:hover { opacity: 0.88; }
+.btn-execute:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Status toast */
+.strat-toast {
+    display: none; padding: 10px 14px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600;
+}
+.strat-toast.ok  { background: rgba(52,199,89,0.12); color: var(--profit); border: 1px solid rgba(52,199,89,0.3); }
+.strat-toast.err { background: rgba(255,77,106,0.12); color: var(--loss);   border: 1px solid rgba(255,77,106,0.3); }
+
+/* Loading shimmer */
+.chain-loading {
+    padding: 40px; text-align: center; color: var(--text-3); font-size: 13px;
+}
+</style>
+
+<div style="margin-bottom:20px;">
+    <span style="font-size:18px;font-weight:700;letter-spacing:-0.4px;">Pre-Built Strategies</span>
+    <span style="margin-left:12px;font-size:12px;color:var(--text-3);">Select a strategy, pick strikes from the chain, then execute.</span>
+</div>
+
+<!-- Config bar -->
+<div class="strat-config">
+    <div class="cfg-group">
+        <label>Underlying</label>
+        <select id="cfg-symbol" onchange="loadChain()">
+            {% for u in underlyings %}
+            <option value="{{ u }}">{{ u }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="cfg-group">
+        <label>Expiry</label>
+        <select id="cfg-expiry" onchange="loadChain()">
+            {% for e in expiries %}
+            <option value="{{ e }}">{{ e }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<!-- Strategy mode selector -->
+<div class="strat-modes">
+    <span style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;align-self:center;margin-right:4px;">Strategy:</span>
+    <button class="mode-btn active" onclick="setMode('straddle',this)">Short Straddle</button>
+    <button class="mode-btn" onclick="setMode('strangle',this)">Short Strangle</button>
+    <button class="mode-btn" onclick="setMode('iron_condor',this)">Iron Condor</button>
+    <button class="mode-btn" onclick="setMode('bull_spread',this)">Bull Call Spread</button>
+    <button class="mode-btn" onclick="setMode('bear_spread',this)">Bear Put Spread</button>
+</div>
+
+<!-- Chain + panel -->
+<div class="strat-page">
+    <!-- Option chain -->
+    <div>
+        <div class="chain-wrap">
+            <div class="chain-info-bar">
+                <span>Spot: <span class="spot-val" id="chain-spot">—</span></span>
+                <span>ATM: <span id="chain-atm" style="font-weight:700;color:var(--text)">—</span></span>
+                <span style="margin-left:auto;font-size:11px;" id="chain-hint">Click a row to select both CE & PE (Straddle)</span>
+            </div>
+            <div class="chain-header">
+                <div class="col-ce">CE &nbsp;·&nbsp; LTP &nbsp;·&nbsp; IV &nbsp;·&nbsp; OI</div>
+                <div class="col-strike">Strike</div>
+                <div class="col-pe">OI &nbsp;·&nbsp; IV &nbsp;·&nbsp; LTP &nbsp;·&nbsp; PE</div>
+            </div>
+            <div class="chain-body" id="chain-body">
+                <div class="chain-loading">Loading chain…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="strat-panel">
+        <div class="panel-title">📋 Strategy Legs</div>
+        <div class="panel-hint" id="panel-hint">Select strikes from the chain to build your strategy.</div>
+
+        <div class="legs-list" id="legs-list"></div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:0;">
+
+        <div class="entry-fields">
+            <div class="entry-field">
+                <label>Lots</label>
+                <input type="number" id="inp-lots" value="1" min="1" max="50">
+            </div>
+            <div class="entry-field">
+                <label>Order Type</label>
+                <select id="inp-order-type">
+                    <option value="LIMIT">LIMIT</option>
+                    <option value="MARKET">MARKET</option>
+                </select>
+            </div>
+            <div class="entry-field">
+                <label>Add to Basket</label>
+                <select id="inp-basket" onchange="onBasketChange()">
+                    <option value="new">➕ Create New Basket</option>
+                    {% for b in baskets %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="inp-new-basket-name" class="new-basket-name show"
+                    placeholder="Basket name (optional)">
+            </div>
+        </div>
+
+        <div class="strat-toast" id="strat-toast"></div>
+
+        <button class="btn-execute" id="btn-execute" onclick="executeStrategy()" disabled>
+            Execute Strategy
+        </button>
+    </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────
+let _mode    = 'straddle';
+let _legs    = [];          // [{strike, opt_type, side, ltp, sym}]
+let _chain   = null;        // current chain data
+
+// Strategy modes config
+const MODES = {
+    straddle:    { hint: 'Click a row to sell CE + PE at the same strike.', clicks: 1, both: true },
+    strangle:    { hint: 'Click CE column to sell CE, PE column to sell PE (different strikes).', clicks: 2 },
+    iron_condor: { hint: 'Step 1: Sell OTM CE. Step 2: Buy further OTM CE. Step 3: Sell OTM PE. Step 4: Buy further OTM PE.', clicks: 4 },
+    bull_spread: { hint: 'Click CE column: first = Buy (lower strike), second = Sell (higher strike).', clicks: 2 },
+    bear_spread: { hint: 'Click PE column: first = Buy (higher strike), second = Sell (lower strike).', clicks: 2 },
+};
+
+function setMode(mode, btn) {
+    _mode = mode;
+    _legs = [];
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('chain-hint').textContent = MODES[mode].hint;
+    document.getElementById('panel-hint').textContent = MODES[mode].hint;
+    renderLegs();
+    renderChainSelection();
+}
+
+// ── Chain loading ─────────────────────────────────────────────────────
+async function loadChain() {
+    const sym = document.getElementById('cfg-symbol').value;
+    const exp = document.getElementById('cfg-expiry').value;
+    document.getElementById('chain-body').innerHTML = '<div class="chain-loading">Loading…</div>';
+    _chain = null;
+    _legs = [];
+    renderLegs();
+    try {
+        const r = await fetch(`/api/chain/${sym}?expiry=${exp}`);
+        _chain = await r.json();
+        renderChain();
+    } catch(e) {
+        document.getElementById('chain-body').innerHTML = '<div class="chain-loading" style="color:var(--loss)">Failed to load chain.</div>';
+    }
+}
+
+function renderChain() {
+    if (!_chain) return;
+    document.getElementById('chain-spot').textContent = _chain.spot.toLocaleString('en-IN', {maximumFractionDigits:2});
+    document.getElementById('chain-atm').textContent  = _chain.atm.toLocaleString('en-IN');
+
+    const body = document.getElementById('chain-body');
+    body.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    for (const s of _chain.strikes) {
+        const row = document.createElement('div');
+        row.className = 'chain-row' + (s.atm ? ' atm-row' : '');
+        row.dataset.strike = s.strike;
+        row.dataset.ceLtp  = s.ce.ltp;
+        row.dataset.peLtp  = s.pe.ltp;
+
+        const oi = v => v >= 1e6 ? (v/1e6).toFixed(1)+'L' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v;
+
+        row.innerHTML = `
+            <div class="ce-side" data-side="ce" onclick="onCellClick(${s.strike},'CE',${s.ce.ltp},this)">
+                <span class="opt-ltp">${s.ce.ltp.toFixed(2)}</span>
+                <span class="opt-iv">${s.ce.iv}%</span>
+                <span class="opt-oi">${oi(s.ce.oi)}</span>
+            </div>
+            <div class="strike-cell">
+                <span>${s.strike.toLocaleString('en-IN')}</span>
+                ${s.atm ? '<span class="atm-badge">ATM</span>' : ''}
+            </div>
+            <div class="pe-side" data-side="pe" onclick="onCellClick(${s.strike},'PE',${s.pe.ltp},this)">
+                <span class="opt-oi">${oi(s.pe.oi)}</span>
+                <span class="opt-iv">${s.pe.iv}%</span>
+                <span class="opt-ltp">${s.pe.ltp.toFixed(2)}</span>
+            </div>`;
+        fragment.appendChild(row);
+    }
+    body.appendChild(fragment);
+
+    // Scroll ATM into view
+    const atmRow = body.querySelector('.atm-row');
+    if (atmRow) atmRow.scrollIntoView({block:'center', behavior:'instant'});
+    renderChainSelection();
+}
+
+// ── Click logic ───────────────────────────────────────────────────────
+function onCellClick(strike, optType, ltp, cell) {
+    const sym = document.getElementById('cfg-symbol').value;
+    const exp = document.getElementById('cfg-expiry').value;
+    const tsym = `${sym}${new Date(exp).toISOString().slice(2,4)}${new Date(exp).getMonth()+1}${new Date(exp).getDate()}${strike}${optType}`;
+
+    if (_mode === 'straddle') {
+        // Sell CE + PE at clicked row (regardless of which side clicked)
+        _legs = [
+            {strike, opt_type:'CE', side:'SELL', ltp: parseFloat(cell.closest('.chain-row').dataset.ceLtp), sym: makeSym(sym,exp,strike,'CE')},
+            {strike, opt_type:'PE', side:'SELL', ltp: parseFloat(cell.closest('.chain-row').dataset.peLtp), sym: makeSym(sym,exp,strike,'PE')},
+        ];
+    } else if (_mode === 'strangle') {
+        if (optType === 'CE') addOrReplace('CE', {strike, opt_type:'CE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'CE')});
+        else                  addOrReplace('PE', {strike, opt_type:'PE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'PE')});
+    } else if (_mode === 'iron_condor') {
+        const ceLegs = _legs.filter(l => l.opt_type === 'CE');
+        const peLegs = _legs.filter(l => l.opt_type === 'PE');
+        if (optType === 'CE') {
+            if (ceLegs.length === 0) _legs.push({strike, opt_type:'CE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'CE')});
+            else if (ceLegs.length === 1) _legs.push({strike, opt_type:'CE', side:'BUY', ltp, sym: makeSym(sym,exp,strike,'CE')});
+        } else {
+            if (peLegs.length === 0) _legs.push({strike, opt_type:'PE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'PE')});
+            else if (peLegs.length === 1) _legs.push({strike, opt_type:'PE', side:'BUY', ltp, sym: makeSym(sym,exp,strike,'PE')});
+        }
+    } else if (_mode === 'bull_spread') {
+        const ceLegs = _legs.filter(l => l.opt_type === 'CE');
+        if (ceLegs.length === 0) _legs.push({strike, opt_type:'CE', side:'BUY',  ltp, sym: makeSym(sym,exp,strike,'CE')});
+        else if (ceLegs.length === 1) _legs.push({strike, opt_type:'CE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'CE')});
+    } else if (_mode === 'bear_spread') {
+        const peLegs = _legs.filter(l => l.opt_type === 'PE');
+        if (peLegs.length === 0) _legs.push({strike, opt_type:'PE', side:'BUY',  ltp, sym: makeSym(sym,exp,strike,'PE')});
+        else if (peLegs.length === 1) _legs.push({strike, opt_type:'PE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'PE')});
+    }
+    renderLegs();
+    renderChainSelection();
+}
+
+function addOrReplace(optType, leg) {
+    _legs = _legs.filter(l => l.opt_type !== optType);
+    _legs.push(leg);
+}
+
+function makeSym(sym, exp, strike, optType) {
+    const d = new Date(exp);
+    const yy = String(d.getFullYear()).slice(2);
+    const m  = d.getMonth() + 1;
+    const dd = d.getDate();
+    return `${sym}${yy}${m}${dd}${strike}${optType}`;
+}
+
+function removeLeg(i) {
+    _legs.splice(i, 1);
+    renderLegs();
+    renderChainSelection();
+}
+
+// ── Render helpers ────────────────────────────────────────────────────
+function renderLegs() {
+    const list = document.getElementById('legs-list');
+    const hint = document.getElementById('panel-hint');
+    const btn  = document.getElementById('btn-execute');
+
+    if (_legs.length === 0) {
+        list.innerHTML = '';
+        hint.style.display = 'block';
+        btn.disabled = true;
+        return;
+    }
+    hint.style.display = 'none';
+    btn.disabled = false;
+
+    const netPremium = _legs.reduce((acc, l) => {
+        return acc + (l.side === 'SELL' ? l.ltp : -l.ltp);
+    }, 0);
+
+    list.innerHTML = _legs.map((l,i) => `
+        <div class="leg-row">
+            <div>
+                <div class="leg-sym">${l.sym}</div>
+                <div style="font-size:11px;color:var(--text-3)">${l.opt_type}</div>
+            </div>
+            <span class="${l.side === 'BUY' ? 'leg-side-buy' : 'leg-side-sell'}">${l.side}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+                <span class="leg-ltp">₹${l.ltp.toFixed(2)}</span>
+                <button class="leg-remove" onclick="removeLeg(${i})" title="Remove">✕</button>
+            </div>
+        </div>
+    `).join('') + (netPremium !== 0 ? `
+        <div style="font-size:12px;color:var(--text-2);text-align:right;margin-top:4px;">
+            Net premium: <span style="font-weight:700;color:${netPremium>0?'var(--profit)':'var(--loss)'}">
+                ${netPremium>0?'+':''}₹${netPremium.toFixed(2)}</span> /lot
+        </div>` : '');
+}
+
+function renderChainSelection() {
+    document.querySelectorAll('.chain-row').forEach(row => {
+        row.classList.remove('sel-ce','sel-pe');
+        const strike = parseFloat(row.dataset.strike);
+        const hasCE = _legs.some(l => l.strike === strike && l.opt_type === 'CE');
+        const hasPE = _legs.some(l => l.strike === strike && l.opt_type === 'PE');
+        if (hasCE) row.classList.add('sel-ce');
+        if (hasPE) row.classList.add('sel-pe');
+    });
+}
+
+// ── Execute ────────────────────────────────────────────────────────────
+async function executeStrategy() {
+    if (_legs.length === 0) return;
+    const btn = document.getElementById('btn-execute');
+    btn.disabled = true;
+    btn.textContent = 'Placing…';
+
+    const sym = document.getElementById('cfg-symbol').value;
+    const exp = document.getElementById('cfg-expiry').value;
+    const lots = parseInt(document.getElementById('inp-lots').value) || 1;
+    const orderType = document.getElementById('inp-order-type').value;
+    const basketId  = document.getElementById('inp-basket').value;
+    const newName   = document.getElementById('inp-new-basket-name').value.trim();
+
+    const form = new FormData();
+    form.append('symbol', sym);
+    form.append('expiry', exp);
+    form.append('lots', lots);
+    form.append('order_type', orderType);
+    form.append('basket_id', basketId);
+    form.append('new_basket_name', newName);
+    form.append('legs', JSON.stringify(_legs));
+
+    try {
+        const r = await fetch('/strategies/execute', {method:'POST', body: form});
+        const data = await r.json();
+        if (r.ok && data.status === 'ok') {
+            showToast('ok', `✓ Strategy added to "${data.basket_name}". Go to Management to set RM.`);
+            _legs = [];
+            renderLegs();
+            renderChainSelection();
+            // Reload basket dropdown
+            const sel = document.getElementById('inp-basket');
+            const opt = document.createElement('option');
+            opt.value = data.basket_id;
+            opt.textContent = data.basket_name;
+            sel.insertBefore(opt, sel.children[1]);
+        } else {
+            showToast('err', data.error || 'Execution failed');
+        }
+    } catch(e) {
+        showToast('err', 'Network error — check server');
+    }
+    btn.textContent = 'Execute Strategy';
+    btn.disabled = (_legs.length === 0);
+}
+
+function showToast(type, msg) {
+    const t = document.getElementById('strat-toast');
+    t.className = `strat-toast ${type}`;
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 6000);
+}
+
+function onBasketChange() {
+    const v = document.getElementById('inp-basket').value;
+    document.getElementById('inp-new-basket-name').className =
+        'new-basket-name' + (v === 'new' ? ' show' : '');
+}
+
+// Init
+loadChain();
+</script>
+{% endblock %}

@@ -6,10 +6,12 @@ Run: uvicorn demo:app --reload --port 8003
 """
 import asyncio
 import copy
+import json
 import logging
+import math
 import random
-import time
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import FastAPI, Form, Request
@@ -22,6 +24,118 @@ from rm.engine import run_engine, reset_basket, rearm_basket, get_basket_state
 logging.basicConfig(level=logging.INFO)
 
 _exit_log: list[dict] = []
+
+# ── Token counter for demo positions ─────────────────────────────────────────
+_next_token_counter = 500000
+
+def _next_token() -> int:
+    global _next_token_counter
+    _next_token_counter += 1
+    return _next_token_counter
+
+# ── Option chain simulation ───────────────────────────────────────────────────
+
+_UNDERLYINGS = {
+    "NIFTY":      {"spot": 24500, "step": 50,  "lot": 25,  "range": 18},
+    "BANKNIFTY":  {"spot": 52000, "step": 100, "lot": 15,  "range": 18},
+    "FINNIFTY":   {"spot": 23500, "step": 50,  "lot": 40,  "range": 18},
+    "MIDCPNIFTY": {"spot": 12800, "step": 25,  "lot": 75,  "range": 18},
+}
+
+def _get_expiries() -> list[str]:
+    """Return next 4 weekly (Thursday) + 1 monthly expiry dates."""
+    today = date.today()
+    days_to_thu = (3 - today.weekday()) % 7 or 7
+    expiries = []
+    thu = today + timedelta(days=days_to_thu)
+    for i in range(4):
+        expiries.append((thu + timedelta(weeks=i)).isoformat())
+    # Monthly: last Thursday of current/next month
+    for delta_m in (0, 1):
+        m = (today.month + delta_m - 1) % 12 + 1
+        y = today.year + (today.month + delta_m - 1) // 12
+        last_day = date(y, m % 12 + 1, 1) - timedelta(days=1) if m < 12 else date(y, 12, 31)
+        while last_day.weekday() != 3:
+            last_day -= timedelta(days=1)
+        iso = last_day.isoformat()
+        if iso not in expiries:
+            expiries.append(iso)
+    return sorted(set(expiries))[:5]
+
+def _bs_price(spot: float, strike: float, days: int, iv: float, is_call: bool) -> float:
+    """Simplified Black-Scholes for demo pricing."""
+    if days <= 0:
+        intrinsic = max(0, spot - strike) if is_call else max(0, strike - spot)
+        return round(intrinsic, 2)
+    t = days / 365
+    r = 0.065
+    sigma = iv / 100
+    from math import log, sqrt, exp
+    try:
+        d1 = (log(spot / strike) + (r + 0.5 * sigma**2) * t) / (sigma * sqrt(t))
+        d2 = d1 - sigma * sqrt(t)
+        def N(x):
+            return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+        if is_call:
+            price = spot * N(d1) - strike * exp(-r * t) * N(d2)
+        else:
+            price = strike * exp(-r * t) * N(-d2) - spot * N(-d1)
+        return round(max(0.05, price), 2)
+    except Exception:
+        return 0.05
+
+def _generate_chain(symbol: str, expiry_iso: str) -> dict:
+    """Generate a realistic simulated option chain."""
+    cfg = _UNDERLYINGS.get(symbol, _UNDERLYINGS["NIFTY"])
+    spot = cfg["spot"] * random.uniform(0.998, 1.002)  # tiny jitter
+    step = cfg["step"]
+    atm  = round(spot / step) * step
+    exp_date = date.fromisoformat(expiry_iso)
+    days = max(1, (exp_date - date.today()).days)
+
+    # Skew: PE IV higher (typical Indian market skew)
+    base_iv = 15 + random.uniform(-1, 1)
+
+    strikes = []
+    for i in range(-cfg["range"], cfg["range"] + 1):
+        strike = atm + i * step
+        dist_pct = abs(i) / cfg["range"]
+
+        ce_iv = base_iv + abs(i) * 0.3 + random.uniform(-0.3, 0.3)
+        pe_iv = base_iv + abs(i) * 0.4 + (1.5 if i < 0 else 0) + random.uniform(-0.3, 0.3)
+
+        ce_ltp = _bs_price(spot, strike, days, ce_iv, True)
+        pe_ltp = _bs_price(spot, strike, days, pe_iv, False)
+
+        oi_base = 800000
+        oi_ce = int(oi_base * math.exp(-dist_pct * 3) * random.uniform(0.7, 1.3) / step * 50)
+        oi_pe = int(oi_base * math.exp(-dist_pct * 3) * random.uniform(0.7, 1.3) / step * 50)
+
+        strikes.append({
+            "strike": strike,
+            "atm": strike == atm,
+            "ce": {"ltp": ce_ltp, "oi": max(1000, oi_ce), "iv": round(ce_iv, 1)},
+            "pe": {"ltp": pe_ltp, "oi": max(1000, oi_pe), "iv": round(pe_iv, 1)},
+        })
+
+    return {
+        "symbol":   symbol,
+        "spot":     round(spot, 2),
+        "atm":      atm,
+        "lot_size": cfg["lot"],
+        "expiry":   expiry_iso,
+        "days":     days,
+        "strikes":  strikes,
+    }
+
+def _make_tradingsymbol(symbol: str, expiry_iso: str, strike: int, opt_type: str) -> str:
+    """Generate NSE-style tradingsymbol. e.g. NIFTY25612 24500CE"""
+    d = date.fromisoformat(expiry_iso)
+    month_codes = {1:"JAN",2:"FEB",3:"MAR",4:"APR",5:"MAY",6:"JUN",
+                   7:"JUL",8:"AUG",9:"SEP",10:"OCT",11:"NOV",12:"DEC"}
+    # Weekly: NIFTY25612 (YY + DD + M_num) or monthly: NIFTYJUN25
+    # Use Kite-style: NIFTY2561224500CE
+    return f"{symbol}{str(d.year)[2:]}{d.month}{d.day}{strike}{opt_type}"
 
 
 async def _demo_exit(basket_id: int, positions: list, reason: str, event_id: int | None = None):
@@ -230,8 +344,106 @@ def _build_context() -> dict:
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    return render("index.html", _build_context())
+async def dashboard():
+    ctx = _build_context()
+    ctx["active_page"] = "dashboard"
+    return render("dashboard.html", ctx)
+
+
+@app.get("/management", response_class=HTMLResponse)
+async def management():
+    ctx = _build_context()
+    ctx["active_page"] = "management"
+    return render("management.html", ctx)
+
+
+@app.get("/strategies", response_class=HTMLResponse)
+async def strategies_page():
+    expiries = _get_expiries()
+    baskets_list = [{"id": bid, "name": b["name"]} for bid, b in _baskets.items()]
+    return render("strategies.html", {
+        "request":    None,
+        "active_page": "strategies",
+        "underlyings": list(_UNDERLYINGS.keys()),
+        "expiries":   expiries,
+        "baskets":    baskets_list,
+        "demo_mode":  False,
+        "user_id":    "DEMO",
+    })
+
+
+@app.get("/api/expiries")
+async def api_expiries():
+    return JSONResponse({"expiries": _get_expiries()})
+
+
+@app.get("/api/chain/{symbol}")
+async def api_chain(symbol: str, expiry: Optional[str] = None):
+    symbol = symbol.upper()
+    if symbol not in _UNDERLYINGS:
+        return JSONResponse({"error": "Unknown symbol"}, status_code=404)
+    expiries = _get_expiries()
+    exp = expiry if expiry in expiries else expiries[0]
+    chain = _generate_chain(symbol, exp)
+    return JSONResponse(chain)
+
+
+@app.post("/strategies/execute")
+async def execute_strategy(request: Request):
+    global _next_basket_id
+    form = await request.form()
+
+    symbol   = form.get("symbol", "NIFTY").upper()
+    expiry   = form.get("expiry", "")
+    lots     = int(form.get("lots", 1))
+    order_type = form.get("order_type", "LIMIT")
+    basket_id_raw = form.get("basket_id", "")
+    new_basket_name = (form.get("new_basket_name") or "").strip()
+
+    # Parse legs: JSON array of {strike, opt_type, side, ltp}
+    legs_json = form.get("legs", "[]")
+    try:
+        legs = json.loads(legs_json)
+    except Exception:
+        return JSONResponse({"error": "Invalid legs JSON"}, status_code=400)
+
+    if not legs:
+        return JSONResponse({"error": "No legs provided"}, status_code=400)
+
+    cfg = _UNDERLYINGS.get(symbol, _UNDERLYINGS["NIFTY"])
+    lot_size = cfg["lot"]
+    qty_per_lot = lots * lot_size
+
+    # Determine basket
+    if basket_id_raw == "new" or not basket_id_raw:
+        bid = _next_basket_id
+        _next_basket_id += 1
+        name = new_basket_name or f"{symbol} Strategy {bid}"
+        _baskets[bid] = {"id": bid, "name": name, "order_type": order_type}
+        _rm[bid] = _empty_rm()
+    else:
+        bid = int(basket_id_raw)
+        if bid not in _baskets:
+            return JSONResponse({"error": "Basket not found"}, status_code=404)
+
+    # Create positions from legs
+    for leg in legs:
+        strike   = int(leg["strike"])
+        opt_type = leg["opt_type"].upper()   # CE or PE
+        side     = leg["side"].upper()        # BUY or SELL
+        ltp      = float(leg.get("ltp", 100))
+
+        qty = qty_per_lot if side == "BUY" else -qty_per_lot
+        token = _next_token()
+        tsym  = _make_tradingsymbol(symbol, expiry, strike, opt_type)
+
+        pos = _make_pos(tsym, "NFO", "NRML", qty, ltp, ltp, token, lot_size)
+        _POSITIONS.append(pos)
+        _PRICES[token] = ltp
+        key = _pos_key(tsym, "NFO", "NRML")
+        _assignments[key] = bid
+
+    return JSONResponse({"status": "ok", "basket_id": bid, "basket_name": _baskets[bid]["name"]})
 
 
 @app.get("/pnl")
@@ -263,6 +475,7 @@ async def logs_page():
     return render("logs.html", {
         "events": [], "basket_names": [], "basket_name": "",
         "from_date": "", "to_date": "", "request": None,
+        "active_page": "logs", "user_id": "DEMO", "demo_mode": False,
     })
 
 
@@ -273,7 +486,7 @@ async def login():
 
 @app.get("/auth/logout")
 async def logout():
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/create")
@@ -283,14 +496,14 @@ async def create_basket(name: str = Form(default="")):
     _next_basket_id += 1
     _baskets[bid] = {"id": bid, "name": name.strip() or f"Basket {bid}", "order_type": "LIMIT"}
     _rm[bid] = _empty_rm()
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rename")
 async def rename_basket(basket_id: int, name: str = Form(...)):
     if basket_id in _baskets:
         _baskets[basket_id]["name"] = name.strip()
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/delete")
@@ -299,20 +512,20 @@ async def delete_basket(basket_id: int):
     _rm.pop(basket_id, None)
     for k in [k for k, v in _assignments.items() if v == basket_id]:
         del _assignments[k]
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/order-type")
 async def save_order_type(basket_id: int, order_type: str = Form(...)):
     if basket_id in _baskets:
         _baskets[basket_id]["order_type"] = order_type if order_type in ("LIMIT", "MARKET") else "LIMIT"
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rearm")
 async def rearm(basket_id: int):
     rearm_basket(basket_id)
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rm/profit-target")
@@ -323,7 +536,7 @@ async def save_pt(basket_id: int, request: Request):
     rm["pt_inr"]    = float(form["inr"])   if form.get("inr")   else None
     rm["pt_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
     reset_basket(basket_id)
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rm/loss-guard")
@@ -334,7 +547,7 @@ async def save_lg(basket_id: int, request: Request):
     rm["lg_inr"]    = float(form["inr"])   if form.get("inr")   else None
     rm["lg_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
     reset_basket(basket_id)
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rm/profit-shield")
@@ -347,7 +560,7 @@ async def save_ps(basket_id: int, request: Request):
     rm["ps_step_profit"] = float(form["step_profit"]) if form.get("step_profit") else None
     rm["ps_step_lock"]   = float(form["step_lock"])   if form.get("step_lock")   else None
     reset_basket(basket_id)
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rm/eod-exit")
@@ -355,7 +568,7 @@ async def save_eod_exit(basket_id: int, request: Request):
     form = await request.form()
     rm = _rm.setdefault(basket_id, _empty_rm())
     rm["eod_exit"] = form.get("enabled") == "1"
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/{basket_id}/rm/delete-on-fire")
@@ -363,7 +576,7 @@ async def save_delete_on_fire(basket_id: int, request: Request):
     form = await request.form()
     rm = _rm.setdefault(basket_id, _empty_rm())
     rm["delete_on_fire"] = 1 if form.get("enabled") == "1" else 0
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/assign")
@@ -375,13 +588,13 @@ async def assign(
     instrument_token: Optional[int] = Form(default=None),
 ):
     _assignments[_pos_key(tradingsymbol, exchange, product)] = basket_id
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/unassign")
 async def unassign(tradingsymbol: str = Form(...), exchange: str = Form(...), product: str = Form(...)):
     _assignments.pop(_pos_key(tradingsymbol, exchange, product), None)
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/new-and-assign")
@@ -398,7 +611,7 @@ async def new_and_assign(
     _baskets[bid] = {"id": bid, "name": basket_name.strip() or f"Basket {bid}", "order_type": "LIMIT"}
     _rm[bid] = _empty_rm()
     _assignments[_pos_key(tradingsymbol, exchange, product)] = bid
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/assign-bulk")
@@ -421,7 +634,7 @@ async def assign_bulk(request: Request):
 
     for sym, exch, prod in zip(symbols, exchanges, products):
         _assignments[_pos_key(sym, exch, prod)] = bid
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
 
 
 @app.post("/baskets/unassign-bulk")
@@ -429,4 +642,4 @@ async def unassign_bulk(request: Request):
     form = await request.form()
     for sym, exch, prod in zip(form.getlist("tradingsymbol"), form.getlist("exchange"), form.getlist("product")):
         _assignments.pop(_pos_key(sym, exch, prod), None)
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/management", status_code=302)
