@@ -3,7 +3,7 @@
 /* ── Reset ────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Design tokens ────────────────────────────────────────────── */
+/* ── Design tokens — Dark (default) ──────────────────────────── */
 :root {
     --bg:          #060a12;
     --bg2:         #0c1220;
@@ -29,6 +29,11 @@
     --accent-grad: linear-gradient(135deg, #5b7fff, #7c5cfc);
     --accent-glow: rgba(91,127,255,0.22);
 
+    --header-bg:   rgba(6,10,18,0.88);
+    --modal-bg:    #0f1623;
+    --rm-panel-bg: rgba(0,0,0,0.18);
+    --basket-rm-bg: rgba(0,0,0,0.15);
+
     --radius-sm:   8px;
     --radius:      14px;
     --radius-lg:   20px;
@@ -36,6 +41,47 @@
     --shadow-sm:   0 1px 3px rgba(0,0,0,0.4);
     --shadow:      0 4px 24px rgba(0,0,0,0.5);
     --shadow-lg:   0 12px 48px rgba(0,0,0,0.6);
+}
+
+/* ── Light theme body background ─────────────────────────────── */
+[data-theme="light"] body {
+    background: var(--bg);
+}
+
+/* ── Light theme ──────────────────────────────────────────────── */
+[data-theme="light"] {
+    --bg:          #f1f4fb;
+    --bg2:         #e5eaf5;
+    --surface:     rgba(255,255,255,0.85);
+    --surface-hov: rgba(255,255,255,1);
+    --border:      rgba(0,0,0,0.09);
+    --border-hov:  rgba(0,0,0,0.18);
+    --text:        #0d1526;
+    --text-2:      #4f5f78;
+    --text-3:      #98a8be;
+
+    --profit:      #009f62;
+    --profit-dim:  rgba(0,159,98,0.1);
+    --profit-glow: rgba(0,159,98,0.2);
+    --loss:        #d93050;
+    --loss-dim:    rgba(217,48,80,0.1);
+    --loss-glow:   rgba(217,48,80,0.2);
+    --warn:        #c8870a;
+    --warn-dim:    rgba(200,135,10,0.1);
+
+    --accent:      #3b65f5;
+    --accent-2:    #6340e8;
+    --accent-grad: linear-gradient(135deg, #3b65f5, #6340e8);
+    --accent-glow: rgba(59,101,245,0.18);
+
+    --header-bg:   rgba(255,255,255,0.92);
+    --modal-bg:    #ffffff;
+    --rm-panel-bg: rgba(0,0,0,0.03);
+    --basket-rm-bg: rgba(0,0,0,0.025);
+
+    --shadow-sm:   0 1px 4px rgba(0,0,0,0.1);
+    --shadow:      0 4px 24px rgba(0,0,0,0.12);
+    --shadow-lg:   0 12px 48px rgba(0,0,0,0.16);
 }
 
 /* ── Base ─────────────────────────────────────────────────────── */
@@ -58,9 +104,10 @@ body::before {
     left: 25%;
     width: 700px;
     height: 500px;
-    background: radial-gradient(ellipse, rgba(91,127,255,0.045) 0%, transparent 65%);
+    background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 65%);
     pointer-events: none;
     z-index: 0;
+    opacity: 0.5;
 }
 
 /* ── Header ───────────────────────────────────────────────────── */
@@ -70,7 +117,7 @@ body::before {
     justify-content: space-between;
     padding: 0 28px;
     height: 54px;
-    background: rgba(6,10,18,0.88);
+    background: var(--header-bg);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-bottom: 1px solid var(--border);
@@ -421,7 +468,7 @@ main {
 
 .basket-rm {
     padding: 16px;
-    background: rgba(0,0,0,0.18);
+    background: var(--rm-panel-bg);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -643,6 +690,22 @@ main {
 .btn-refresh { font-size: 12.5px; }
 .btn-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.btn-theme {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 5px 9px;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s, transform 0.2s;
+}
+.btn-theme:hover {
+    background: var(--surface-hov);
+    border-color: var(--border-hov);
+    transform: rotate(20deg);
+}
+
 .btn-ghost-sm {
     background: transparent;
     color: var(--text-2);
@@ -757,7 +820,7 @@ main {
 }
 
 .modal {
-    background: #0f1623;
+    background: var(--modal-bg);
     border: 1px solid var(--border-hov);
     border-radius: var(--radius-lg);
     padding: 28px;

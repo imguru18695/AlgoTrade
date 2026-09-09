@@ -19,6 +19,7 @@
             <span class="user-id">{{ user_id }}</span>
             {% endif %}
             <span class="header-clock" id="header-clock"></span>
+            <button class="btn-theme" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
             <button class="btn-ghost btn-refresh" id="refresh-btn" onclick="manualRefresh(this)">⟳ Refresh</button>
             <a href="/logs" class="btn-ghost">Logs</a>
             <a href="/auth/logout" class="btn-ghost">Logout</a>
@@ -28,6 +29,26 @@
         {% block content %}{% endblock %}
     </main>
     <script>
+    // ── Theme ─────────────────────────────────────────────────────
+    (function() {
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+    })();
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        document.getElementById('theme-toggle').textContent = next === 'dark' ? '🌙' : '☀️';
+    }
+
+    // Set correct icon on load
+    window.addEventListener('DOMContentLoaded', function() {
+        const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+        document.getElementById('theme-toggle').textContent = theme === 'dark' ? '🌙' : '☀️';
+    });
+
     function manualRefresh(btn) {
         btn.disabled = true;
         btn.textContent = '⟳ Refreshing…';
