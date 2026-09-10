@@ -51,10 +51,11 @@
 .vix-stat-val.neutral { color: var(--text-2); }
 
 /* Right: gauge + 52W */
-.vix-gauge-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 140px; }
-.vix-gauge-row  { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); }
-.vix-gauge { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.vix-fill  { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+.vix-gauge-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+.vix-gauge-row  { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-2); }
+.vix-gauge-row strong { color: var(--text); font-weight: 700; }
+.vix-gauge { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.vix-fill  { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
 .vix-ma-row { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--border); margin-top: 2px; }
 .vix-ma { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-2); }
 .vix-ma span { font-weight: 700; color: var(--text); }
@@ -296,7 +297,7 @@
                         background:{% if vix < 14 %}var(--profit){% elif vix < 20 %}var(--warn){% else %}var(--loss){% endif %}">
             </div>
         </div>
-        <div style="font-size:10px;color:var(--text-3);text-align:center;">Position within 52W range</div>
+        <div style="font-size:10px;color:var(--text-2);text-align:center;letter-spacing:0.03em;">Position within 52W range</div>
     </div>
 
 </div>
