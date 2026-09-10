@@ -80,7 +80,7 @@
 /* Sparkline */
 .vix-sparkline-wrap { margin-top: 4px; }
 .vix-sparkline-label { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
-#vix-sparkline { display: block; width: 100%; height: 36px; overflow: visible; }
+#vix-sparkline { display: block; width: 100%; height: 44px; overflow: visible; cursor: crosshair; }
 
 /* ── Template list ─────────────────────────────────────────────────── */
 .tmpl-list { display: flex; flex-direction: column; gap: 14px; }
@@ -273,17 +273,34 @@
         </span>
         <div class="vix-sparkline-wrap">
             <div class="vix-sparkline-label">Trend</div>
-            <svg id="vix-sparkline" viewBox="0 0 120 36" preserveAspectRatio="none">
+            <svg id="vix-sparkline" viewBox="0 0 120 44" preserveAspectRatio="none">
                 <defs>
                     <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stop-color="currentColor" stop-opacity="0.25"/>
                         <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
                     </linearGradient>
                 </defs>
+                <!-- area fill + line -->
                 <path id="spark-area" fill="url(#spark-grad)"/>
                 <polyline id="spark-line" fill="none" stroke="currentColor" stroke-width="1.5"
                           stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- tail dot (latest value) -->
                 <circle id="spark-dot" r="2.5" fill="currentColor"/>
+                <!-- hover elements (hidden by default) -->
+                <line id="spark-crosshair" x1="0" y1="0" x2="0" y2="36"
+                      stroke="currentColor" stroke-width="0.8" stroke-dasharray="2,2" opacity="0"/>
+                <circle id="spark-hover-dot" r="3" fill="var(--surface)"
+                      stroke="currentColor" stroke-width="1.5" opacity="0"/>
+                <!-- tooltip box -->
+                <g id="spark-tooltip" opacity="0">
+                    <rect id="spark-tip-bg" x="0" y="0" width="34" height="14"
+                          rx="3" fill="var(--text)"/>
+                    <text id="spark-tip-txt" x="17" y="10"
+                          text-anchor="middle" font-size="8" font-weight="800"
+                          fill="var(--bg)" font-family="system-ui,sans-serif"/>
+                </g>
+                <!-- invisible hit area over full SVG -->
+                <rect id="spark-hit" x="0" y="0" width="120" height="44" fill="transparent"/>
             </svg>
         </div>
     </div>
@@ -671,27 +688,30 @@ async function refreshVix() {
 }
 setInterval(refreshVix, 5000);
 
-// ── Sparkline renderer ────────────────────────────────────────────────
+// ── Sparkline renderer + hover ────────────────────────────────────────
+let _sparkPts = [], _sparkFns = null;
+
 function _drawSparkline(pts, col) {
     const W = 120, H = 36, PAD = 3;
     const mn = Math.min(...pts), mx = Math.max(...pts);
-    const range = mx - mn || 1;
+    const range = mx - mn || 0.01;
     const n = pts.length;
 
     const x = i => PAD + (i / (n - 1)) * (W - PAD * 2);
     const y = v => H - PAD - ((v - mn) / range) * (H - PAD * 2);
 
-    const coords = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    _sparkPts = pts;
+    _sparkFns = { x, y, n, W, H };
 
-    // Closed area path for gradient fill
+    const coords   = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const areaPath = `M${x(0).toFixed(1)},${H} ` +
         pts.map((v, i) => `L${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ') +
         ` L${x(n-1).toFixed(1)},${H} Z`;
 
-    const line   = document.getElementById('spark-line');
-    const area   = document.getElementById('spark-area');
-    const dot    = document.getElementById('spark-dot');
-    const svg    = document.getElementById('vix-sparkline');
+    const svg  = document.getElementById('vix-sparkline');
+    const line = document.getElementById('spark-line');
+    const area = document.getElementById('spark-area');
+    const dot  = document.getElementById('spark-dot');
     if (!line) return;
 
     svg.style.color = col;
@@ -700,6 +720,80 @@ function _drawSparkline(pts, col) {
     dot.setAttribute('cx', x(n - 1).toFixed(1));
     dot.setAttribute('cy', y(pts[n - 1]).toFixed(1));
 }
+
+// Wire hover once on DOM ready
+(function _wireSparkHover() {
+    const hit       = document.getElementById('spark-hit');
+    const crosshair = document.getElementById('spark-crosshair');
+    const hDot      = document.getElementById('spark-hover-dot');
+    const tipG      = document.getElementById('spark-tooltip');
+    const tipBg     = document.getElementById('spark-tip-bg');
+    const tipTxt    = document.getElementById('spark-tip-txt');
+    const tailDot   = document.getElementById('spark-dot');
+    if (!hit) return;
+
+    const W = 120, H = 36, PAD = 3;
+
+    function show(svgX) {
+        if (!_sparkFns || _sparkPts.length < 2) return;
+        const { x, y, n } = _sparkFns;
+
+        // find closest data index
+        let best = 0, bestDist = Infinity;
+        for (let i = 0; i < n; i++) {
+            const d = Math.abs(x(i) - svgX);
+            if (d < bestDist) { bestDist = d; best = i; }
+        }
+        const val = _sparkPts[best];
+        const cx  = x(best), cy = y(val);
+
+        // crosshair
+        crosshair.setAttribute('x1', cx); crosshair.setAttribute('x2', cx);
+        crosshair.setAttribute('y2', H);  crosshair.setAttribute('opacity', '0.6');
+
+        // hover dot
+        hDot.setAttribute('cx', cx); hDot.setAttribute('cy', cy);
+        hDot.setAttribute('opacity', '1');
+
+        // tail dot: hide when hovering near it
+        tailDot.setAttribute('opacity', bestDist < 6 ? '0' : '1');
+
+        // tooltip box — clamp so it stays inside viewBox
+        const TW = 34, TH = 14;
+        let tx = cx - TW / 2;
+        if (tx < 1) tx = 1;
+        if (tx + TW > W - 1) tx = W - 1 - TW;
+        const ty = Math.max(0, cy - TH - 5);
+
+        tipBg.setAttribute('x', tx); tipBg.setAttribute('y', ty);
+        tipBg.setAttribute('width', TW); tipBg.setAttribute('height', TH);
+        tipTxt.setAttribute('x', tx + TW / 2); tipTxt.setAttribute('y', ty + 10);
+        tipTxt.textContent = val.toFixed(2);
+        tipG.setAttribute('opacity', '1');
+    }
+
+    function hide() {
+        crosshair.setAttribute('opacity', '0');
+        hDot.setAttribute('opacity', '0');
+        tipG.setAttribute('opacity', '0');
+        tailDot.setAttribute('opacity', '1');
+    }
+
+    hit.addEventListener('mousemove', e => {
+        const rect = hit.ownerSVGElement.getBoundingClientRect();
+        // map screen x → SVG viewBox x (account for non-square scaling)
+        const svgX = ((e.clientX - rect.left) / rect.width) * W;
+        show(svgX);
+    });
+    hit.addEventListener('mouseleave', hide);
+    hit.addEventListener('touchmove', e => {
+        e.preventDefault();
+        const rect = hit.ownerSVGElement.getBoundingClientRect();
+        const svgX = ((e.touches[0].clientX - rect.left) / rect.width) * W;
+        show(svgX);
+    }, { passive: false });
+    hit.addEventListener('touchend', hide);
+})();
 
 // Draw on load with pre-seeded history
 refreshVix();
