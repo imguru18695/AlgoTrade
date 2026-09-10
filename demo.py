@@ -28,7 +28,21 @@ logging.basicConfig(level=logging.INFO)
 _exit_log: list[dict] = []
 
 # ── Simulated India VIX ───────────────────────────────────────────────────────
-_VIX: float = 14.5   # drifts slowly with price loop
+_VIX: float          = 14.5    # current value (drifts every 3s)
+_VIX_PREV_CLOSE: float = 14.2  # simulated previous-day close (fixed)
+_VIX_5D_AGO: float   = 13.8    # simulated value 5 trading days ago (fixed)
+_VIX_52W_HIGH: float = 24.5    # simulated 52-week high (fixed)
+_VIX_52W_LOW: float  = 10.8    # simulated 52-week low (fixed)
+_VIX_HISTORY: list[float] = [  # rolling history for EMA/SMA (pre-seeded 50 values)
+    13.0,13.1,13.4,13.2,13.5,13.8,14.0,14.2,13.9,13.7,
+    13.5,13.8,14.1,14.3,14.0,13.8,13.6,13.9,14.2,14.4,
+    14.1,13.9,14.0,14.3,14.5,14.2,14.0,14.3,14.5,14.4,
+    14.2,14.0,14.3,14.5,14.7,14.4,14.2,14.4,14.5,14.3,
+    14.1,14.3,14.5,14.4,14.2,14.4,14.5,14.3,14.4,14.5,
+]
+_VIX_EMA9:  float = 14.5
+_VIX_EMA21: float = 14.2
+_VIX_SMA20: float = 14.3
 
 # ── Token counter for demo positions ─────────────────────────────────────────
 _next_token_counter = 500000
@@ -227,6 +241,19 @@ async def _simulate_fill(order_id: str, delay: float = 2.5):
 _PRICES: dict[int, float] = {}   # instrument_token → live price
 
 
+def _update_vix_indicators(new_vix: float) -> None:
+    """Update EMA(9), EMA(21), SMA(20) from latest VIX tick."""
+    global _VIX_EMA9, _VIX_EMA21, _VIX_SMA20
+    _VIX_HISTORY.append(new_vix)
+    if len(_VIX_HISTORY) > 200:
+        _VIX_HISTORY.pop(0)
+    k9  = 2 / (9  + 1)
+    k21 = 2 / (21 + 1)
+    _VIX_EMA9  = round(new_vix * k9  + _VIX_EMA9  * (1 - k9),  2)
+    _VIX_EMA21 = round(new_vix * k21 + _VIX_EMA21 * (1 - k21), 2)
+    _VIX_SMA20 = round(sum(_VIX_HISTORY[-20:]) / min(len(_VIX_HISTORY), 20), 2)
+
+
 async def _price_drift_loop():
     """Randomly drift prices and VIX every 3 seconds to simulate live ticks."""
     global _VIX
@@ -241,6 +268,7 @@ async def _price_drift_loop():
             _PRICES[tok] = round(new_price, 2)
         # VIX slow drift ±0.1 per tick, clamped 10–25
         _VIX = round(max(10.0, min(25.0, _VIX + random.uniform(-0.1, 0.1))), 2)
+        _update_vix_indicators(_VIX)
 
 
 @asynccontextmanager
@@ -842,7 +870,23 @@ async def demo_modify(order_id: str, request: Request):
 
 @app.get("/api/vix")
 async def api_vix():
-    return JSONResponse({"vix": _VIX})
+    chg_1d   = round(_VIX - _VIX_PREV_CLOSE, 2)
+    chg_1d_p = round(chg_1d / _VIX_PREV_CLOSE * 100, 2)
+    chg_5d   = round(_VIX - _VIX_5D_AGO, 2)
+    chg_5d_p = round(chg_5d / _VIX_5D_AGO * 100, 2)
+    return JSONResponse({
+        "vix":          _VIX,
+        "prev_close":   _VIX_PREV_CLOSE,
+        "chg_1d":       chg_1d,
+        "chg_1d_pct":   chg_1d_p,
+        "chg_5d":       round(_VIX - _VIX_5D_AGO, 2),
+        "chg_5d_pct":   chg_5d_p,
+        "w52_high":     _VIX_52W_HIGH,
+        "w52_low":      _VIX_52W_LOW,
+        "ema9":         _VIX_EMA9,
+        "ema21":        _VIX_EMA21,
+        "sma20":        _VIX_SMA20,
+    })
 
 
 @app.get("/strategies", response_class=HTMLResponse)
@@ -860,6 +904,15 @@ async def strategies_page():
         "strategy_types": strat_templates.STRATEGY_TYPES,
         "expiry_rules": strat_templates.EXPIRY_RULES,
         "vix":          _VIX,
+        "vix_chg_1d":   round(_VIX - _VIX_PREV_CLOSE, 2),
+        "vix_chg_1d_pct": round((_VIX - _VIX_PREV_CLOSE) / _VIX_PREV_CLOSE * 100, 2),
+        "vix_chg_5d":   round(_VIX - _VIX_5D_AGO, 2),
+        "vix_chg_5d_pct": round((_VIX - _VIX_5D_AGO) / _VIX_5D_AGO * 100, 2),
+        "vix_52w_high": _VIX_52W_HIGH,
+        "vix_52w_low":  _VIX_52W_LOW,
+        "vix_ema9":     _VIX_EMA9,
+        "vix_ema21":    _VIX_EMA21,
+        "vix_sma20":    _VIX_SMA20,
         "demo_mode":    False,
         "user_id":      "DEMO",
     })

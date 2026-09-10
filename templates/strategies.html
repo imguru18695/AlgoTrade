@@ -20,19 +20,44 @@
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
 
-/* ── VIX bar ────────────────────────────────────────────────────────── */
-.vix-bar {
-    display: flex; align-items: center; gap: 16px;
+/* ── VIX panel ──────────────────────────────────────────────────────── */
+.vix-panel {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 12px 20px; margin-bottom: 16px;
+    border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0 24px; align-items: center;
 }
-.vix-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
-.vix-value { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.vix-low    { color: var(--profit); }
-.vix-mid    { color: var(--warn); }
-.vix-high   { color: var(--loss); }
-.vix-gauge  { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; max-width: 200px; }
-.vix-fill   { height: 100%; border-radius: 3px; transition: width 0.6s; }
+.vix-main { display: flex; flex-direction: column; gap: 2px; }
+.vix-title { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.vix-value { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.vix-low   { color: var(--profit); }
+.vix-mid   { color: var(--warn); }
+.vix-high  { color: var(--loss); }
+.vix-chg   { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vix-chg.up   { color: var(--loss); }
+.vix-chg.down { color: var(--profit); }
+.vix-chg.flat { color: var(--text-3); }
+
+/* Centre: stats row */
+.vix-stats {
+    display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: center;
+}
+.vix-stat { display: flex; flex-direction: column; gap: 1px; }
+.vix-stat-label { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
+.vix-stat-val   { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.vix-stat-val.up   { color: var(--loss); }
+.vix-stat-val.down { color: var(--profit); }
+.vix-stat-val.neutral { color: var(--text-2); }
+
+/* Right: gauge + 52W */
+.vix-gauge-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 140px; }
+.vix-gauge-row  { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); }
+.vix-gauge { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.vix-fill  { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+.vix-ma-row { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--border); margin-top: 2px; }
+.vix-ma { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.vix-ma span { font-weight: 700; color: var(--text); }
 
 /* ── Template list ─────────────────────────────────────────────────── */
 .tmpl-list { display: flex; flex-direction: column; gap: 14px; }
@@ -206,19 +231,74 @@
 </style>
 
 <!-- Page header -->
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
     <span style="font-size:18px;font-weight:700;letter-spacing:-0.4px;">Strategies</span>
-    <div style="display:flex;align-items:center;gap:12px;">
-        <span style="font-size:12px;color:var(--text-3)">India VIX</span>
-        <span class="vix-value {% if vix < 14 %}vix-low{% elif vix < 20 %}vix-mid{% else %}vix-high{% endif %}"
-              id="vix-display">{{ "%.2f"|format(vix) }}</span>
+</div>
+
+<!-- ── India VIX Panel ─────────────────────────────────────────────── -->
+{% set _vc = 'vix-low' if vix < 14 else ('vix-mid' if vix < 20 else 'vix-high') %}
+{% set _chg_cls = 'up' if vix_chg_1d > 0 else ('down' if vix_chg_1d < 0 else 'flat') %}
+<div class="vix-panel">
+
+    <!-- Left: value + daily change -->
+    <div class="vix-main">
+        <span class="vix-title">India VIX</span>
+        <span class="vix-value {{ _vc }}" id="vix-display">{{ "%.2f"|format(vix) }}</span>
+        <span class="vix-chg {{ _chg_cls }}" id="vix-chg-1d">
+            {{ '+' if vix_chg_1d > 0 else '' }}{{ "%.2f"|format(vix_chg_1d) }}
+            ({{ '+' if vix_chg_1d_pct > 0 else '' }}{{ "%.2f"|format(vix_chg_1d_pct) }}%)
+        </span>
+    </div>
+
+    <!-- Centre: stat tiles -->
+    <div class="vix-stats">
+        <div class="vix-stat">
+            <span class="vix-stat-label">Prev Close</span>
+            <span class="vix-stat-val neutral" id="vix-prev">{{ "%.2f"|format(vix - vix_chg_1d) }}</span>
+        </div>
+        <div class="vix-stat">
+            <span class="vix-stat-label">1D Change</span>
+            <span class="vix-stat-val {{ _chg_cls }}" id="vix-1d">
+                {{ '+' if vix_chg_1d > 0 else '' }}{{ "%.2f"|format(vix_chg_1d) }}
+                &nbsp;({{ '+' if vix_chg_1d_pct > 0 else '' }}{{ "%.2f"|format(vix_chg_1d_pct) }}%)
+            </span>
+        </div>
+        <div class="vix-stat">
+            <span class="vix-stat-label">5D Change</span>
+            <span class="vix-stat-val {{ 'up' if vix_chg_5d > 0 else ('down' if vix_chg_5d < 0 else 'flat') }}" id="vix-5d">
+                {{ '+' if vix_chg_5d > 0 else '' }}{{ "%.2f"|format(vix_chg_5d) }}
+                &nbsp;({{ '+' if vix_chg_5d_pct > 0 else '' }}{{ "%.2f"|format(vix_chg_5d_pct) }}%)
+            </span>
+        </div>
+        <div class="vix-stat">
+            <span class="vix-stat-label">EMA 9</span>
+            <span class="vix-stat-val neutral" id="vix-ema9">{{ "%.2f"|format(vix_ema9) }}</span>
+        </div>
+        <div class="vix-stat">
+            <span class="vix-stat-label">EMA 21</span>
+            <span class="vix-stat-val neutral" id="vix-ema21">{{ "%.2f"|format(vix_ema21) }}</span>
+        </div>
+        <div class="vix-stat">
+            <span class="vix-stat-label">SMA 20</span>
+            <span class="vix-stat-val neutral" id="vix-sma20">{{ "%.2f"|format(vix_sma20) }}</span>
+        </div>
+    </div>
+
+    <!-- Right: 52W gauge -->
+    <div class="vix-gauge-wrap">
+        <div class="vix-gauge-row">
+            <span>52W L: <strong>{{ vix_52w_low }}</strong></span>
+            <span>52W H: <strong>{{ vix_52w_high }}</strong></span>
+        </div>
         <div class="vix-gauge">
             <div class="vix-fill" id="vix-fill"
-                 style="width:{{ [(vix/30*100)|int, 100]|min }}%;
+                 style="width:{{ [((vix - vix_52w_low) / (vix_52w_high - vix_52w_low) * 100)|int, 100]|min }}%;
                         background:{% if vix < 14 %}var(--profit){% elif vix < 20 %}var(--warn){% else %}var(--loss){% endif %}">
             </div>
         </div>
+        <div style="font-size:10px;color:var(--text-3);text-align:center;">Position within 52W range</div>
     </div>
+
 </div>
 
 <!-- Tabs -->
@@ -488,17 +568,48 @@ function switchTab(tab, btn) {
 }
 
 // ── VIX live update ───────────────────────────────────────────────────
+function _chgClass(v) { return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'; }
+function _fmtChg(v, p) {
+    return (v > 0 ? '+' : '') + v.toFixed(2) + ' (' + (p > 0 ? '+' : '') + p.toFixed(2) + '%)';
+}
+
 async function refreshVix() {
     try {
         const r = await fetch('/api/vix');
         const d = await r.json();
         const v = d.vix;
-        const el = document.getElementById('vix-display');
+        const col = v < 14 ? 'var(--profit)' : v < 20 ? 'var(--warn)' : 'var(--loss)';
+
+        // Main value
+        const elV = document.getElementById('vix-display');
+        elV.textContent = v.toFixed(2);
+        elV.className = 'vix-value ' + (v < 14 ? 'vix-low' : v < 20 ? 'vix-mid' : 'vix-high');
+
+        // Daily change (header)
+        const elC = document.getElementById('vix-chg-1d');
+        elC.textContent = _fmtChg(d.chg_1d, d.chg_1d_pct);
+        elC.className = 'vix-chg ' + _chgClass(d.chg_1d);
+
+        // Stat tiles
+        const set = (id, text, cls) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'vix-stat-val ' + (cls || 'neutral');
+        };
+        set('vix-prev',  d.prev_close.toFixed(2));
+        set('vix-1d',    _fmtChg(d.chg_1d, d.chg_1d_pct),  _chgClass(d.chg_1d));
+        set('vix-5d',    _fmtChg(d.chg_5d, d.chg_5d_pct),  _chgClass(d.chg_5d));
+        set('vix-ema9',  d.ema9.toFixed(2));
+        set('vix-ema21', d.ema21.toFixed(2));
+        set('vix-sma20', d.sma20.toFixed(2));
+
+        // 52W gauge
         const fill = document.getElementById('vix-fill');
-        el.textContent = v.toFixed(2);
-        el.className = 'vix-value ' + (v < 14 ? 'vix-low' : v < 20 ? 'vix-mid' : 'vix-high');
-        fill.style.width = Math.min(v/30*100, 100) + '%';
-        fill.style.background = v < 14 ? 'var(--profit)' : v < 20 ? 'var(--warn)' : 'var(--loss)';
+        const pct = Math.max(0, Math.min(100,
+            (v - d.w52_low) / (d.w52_high - d.w52_low) * 100));
+        fill.style.width = pct + '%';
+        fill.style.background = col;
     } catch(e) {}
 }
 setInterval(refreshVix, 5000);
