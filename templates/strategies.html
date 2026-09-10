@@ -476,38 +476,50 @@ async function executeStrategy() {
     btn.disabled = true;
     btn.textContent = 'Placing…';
 
-    const sym = document.getElementById('cfg-symbol').value;
-    const exp = document.getElementById('cfg-expiry').value;
-    const lots = parseInt(document.getElementById('inp-lots').value) || 1;
+    const lots      = parseInt(document.getElementById('inp-lots').value) || 1;
     const orderType = document.getElementById('inp-order-type').value;
     const basketId  = document.getElementById('inp-basket').value;
     const newName   = document.getElementById('inp-new-basket-name').value.trim();
 
-    const form = new FormData();
-    form.append('symbol', sym);
-    form.append('expiry', exp);
-    form.append('lots', lots);
-    form.append('order_type', orderType);
-    form.append('basket_id', basketId);
-    form.append('new_basket_name', newName);
-    form.append('legs', JSON.stringify(_legs));
-
     try {
-        const r = await fetch('/strategies/execute', {method:'POST', body: form});
+        const sym = document.getElementById('cfg-symbol').value;
+        const exp = document.getElementById('cfg-expiry').value;
+        const modeLabel = {
+            straddle: 'Short Straddle', strangle: 'Short Strangle',
+            iron_condor: 'Iron Condor', bull_spread: 'Bull Call Spread',
+            bear_spread: 'Bear Put Spread',
+        }[_mode] || _mode;
+
+        const payload = {
+            basket_id:     basketId === 'new' ? null : parseInt(basketId),
+            basket_name:   newName || `${sym} ${modeLabel}`,
+            strategy_name: modeLabel,
+            legs: _legs.map(l => ({
+                tradingsymbol: l.sym,
+                exchange:      'NFO',
+                product:       'NRML',
+                side:          l.side,
+                qty:           lots * (_chain ? _chain.lot_size : 25),
+                order_type:    orderType,
+                price:         l.ltp,
+            })),
+        };
+
+        const r = await fetch('/execution/place', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
         const data = await r.json();
-        if (r.ok && data.status === 'ok') {
-            showToast('ok', `✓ Strategy added to "${data.basket_name}". Go to Management to set RM.`);
+        if (r.ok && (!data.errors || data.errors.length === 0)) {
+            showToast('ok', `✓ ${data.placed.length} order(s) sent to Execution → basket "${data.basket_name}". Redirecting…`);
             _legs = [];
             renderLegs();
             renderChainSelection();
-            // Reload basket dropdown
-            const sel = document.getElementById('inp-basket');
-            const opt = document.createElement('option');
-            opt.value = data.basket_id;
-            opt.textContent = data.basket_name;
-            sel.insertBefore(opt, sel.children[1]);
+            setTimeout(() => { window.location.href = '/execution'; }, 1800);
         } else {
-            showToast('err', data.error || 'Execution failed');
+            const errMsg = (data.errors && data.errors[0]?.error) || data.error || 'Execution failed';
+            showToast('err', errMsg);
         }
     } catch(e) {
         showToast('err', 'Network error — check server');

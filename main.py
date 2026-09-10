@@ -13,7 +13,9 @@ from auth.routes import router as auth_router
 from auth.token_store import load_token, load_user_id
 from baskets.routes import router as baskets_router
 from logs.routes import router as logs_router
-from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type, delete_basket
+from execution.routes import router as execution_router
+from execution import engine as exec_engine
+from baskets.service import list_baskets, get_assigned_positions, get_rm, get_order_type, delete_basket, assign_position
 from kite.client import get_kite
 from kite.positions import fetch_positions
 from kite import ticker
@@ -184,6 +186,17 @@ async def lifespan(app: FastAPI):
         task.add_done_callback(_background_tasks.discard)
 
     _keep(asyncio.create_task(_refresh_loop()))
+
+    # Auto-assign filled execution orders to their target basket
+    async def _exec_assign_fn(basket_id: int, tradingsymbol: str, exchange: str, product: str):
+        try:
+            await asyncio.to_thread(assign_position, basket_id, tradingsymbol, exchange, product)
+            logging.info(f"Execution: auto-assigned {tradingsymbol} → basket {basket_id}")
+        except Exception as e:
+            logging.error(f"Execution auto-assign failed: {e}")
+
+    _keep(asyncio.create_task(exec_engine.poll_orders(assign_fn=_exec_assign_fn)))
+
     async def _delete_basket_fn(basket_id: int):
         await asyncio.to_thread(delete_basket, basket_id)
         # Evict from cache immediately so the engine doesn't re-trigger
@@ -213,6 +226,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(baskets_router)
 app.include_router(logs_router)
+app.include_router(execution_router)
 
 templates = Jinja2Templates(directory="templates")
 

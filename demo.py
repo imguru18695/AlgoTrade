@@ -154,6 +154,69 @@ def _get_baskets_for_engine() -> list[dict]:
     return _build_context()["baskets"]
 
 
+# ── Demo execution order book ────────────────────────────────────────────────
+
+_DEMO_ORDERS: dict[str, dict] = {}   # order_id → order record
+_demo_order_seq = 0
+
+def _demo_new_order_id() -> str:
+    global _demo_order_seq
+    _demo_order_seq += 1
+    return f"DEMO{_demo_order_seq:06d}"
+
+def _demo_order_record(order_id, basket_id, basket_name, tradingsymbol,
+                        exchange, product, side, qty, order_type, price,
+                        strategy_name="") -> dict:
+    return {
+        "order_id":      order_id,
+        "basket_id":     basket_id,
+        "basket_name":   basket_name,
+        "tradingsymbol": tradingsymbol,
+        "exchange":      exchange,
+        "product":       product,
+        "side":          side,
+        "qty":           qty,
+        "order_type":    order_type,
+        "price":         price,
+        "status":        "OPEN",
+        "filled_qty":    0,
+        "avg_price":     None,
+        "placed_at":     time.time() if True else 0,
+        "strategy_name": strategy_name,
+        "reject_reason": None,
+    }
+
+import time as _time_mod   # avoid shadowing built-in
+
+async def _simulate_fill(order_id: str, delay: float = 2.5):
+    """Simulate fill after a short delay, then auto-assign to basket."""
+    await asyncio.sleep(delay)
+    rec = _DEMO_ORDERS.get(order_id)
+    if not rec or rec["status"] != "OPEN":
+        return
+
+    fill_price = rec["price"] or 100.0
+    rec["status"]     = "COMPLETE"
+    rec["filled_qty"] = rec["qty"]
+    rec["avg_price"]  = fill_price
+
+    # Add to live positions and assign to basket
+    qty   = rec["qty"] if rec["side"] == "BUY" else -rec["qty"]
+    token = _next_token()
+    pos   = _make_pos(rec["tradingsymbol"], rec["exchange"], rec["product"],
+                      qty, fill_price, fill_price, token,
+                      _UNDERLYINGS.get(rec["tradingsymbol"][:len(rec["tradingsymbol"])].split("2")[0],
+                                       {"lot": 25}).get("lot", 25))
+    _POSITIONS.append(pos)
+    _PRICES[token] = fill_price
+
+    if rec.get("basket_id") is not None:
+        key = _pos_key(rec["tradingsymbol"], rec["exchange"], rec["product"])
+        _assignments[key] = rec["basket_id"]
+
+    logging.info(f"[DEMO FILL] {order_id}: {rec['tradingsymbol']} @ {fill_price}")
+
+
 # ── Simulated price drift ─────────────────────────────────────────────────────
 
 _PRICES: dict[int, float] = {}   # instrument_token → live price
@@ -643,3 +706,103 @@ async def unassign_bulk(request: Request):
     for sym, exch, prod in zip(form.getlist("tradingsymbol"), form.getlist("exchange"), form.getlist("product")):
         _assignments.pop(_pos_key(sym, exch, prod), None)
     return RedirectResponse(url="/management", status_code=302)
+
+
+# ── Execution routes (demo) ───────────────────────────────────────────────────
+
+@app.get("/execution", response_class=HTMLResponse)
+async def execution_page():
+    baskets_list = [{"id": bid, "name": b["name"]} for bid, b in _baskets.items()]
+    orders = sorted(_DEMO_ORDERS.values(), key=lambda o: o["placed_at"], reverse=True)
+    return render("execution.html", {
+        "request":     None,
+        "active_page": "execution",
+        "orders":      list(orders),
+        "baskets":     baskets_list,
+        "demo_mode":   False,
+        "user_id":     "DEMO",
+    })
+
+
+@app.post("/execution/place")
+async def demo_place_orders(request: Request):
+    global _next_basket_id
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    legs          = data.get("legs", [])
+    basket_id_raw = data.get("basket_id")
+    basket_name   = (data.get("basket_name") or "").strip()
+    strategy_name = data.get("strategy_name", "")
+
+    if not legs:
+        return JSONResponse({"error": "No legs"}, status_code=400)
+
+    # Resolve basket
+    if basket_id_raw is None or basket_id_raw == "new":
+        bid = _next_basket_id
+        _next_basket_id += 1
+        name = basket_name or f"{strategy_name or 'Strategy'} {bid}"
+        _baskets[bid] = {"id": bid, "name": name, "order_type": "LIMIT"}
+        _rm[bid] = _empty_rm()
+        basket_name = name
+    else:
+        bid = int(basket_id_raw)
+        basket_name = _baskets.get(bid, {}).get("name", basket_name)
+
+    placed = []
+    errors = []
+    for leg in legs:
+        tsym       = leg.get("tradingsymbol", "")
+        exchange   = leg.get("exchange", "NFO")
+        product    = leg.get("product", "NRML")
+        side       = leg.get("side", "BUY").upper()
+        qty        = int(leg.get("qty", 0))
+        order_type = leg.get("order_type", "LIMIT").upper()
+        price      = leg.get("price")
+
+        if not tsym or qty <= 0:
+            errors.append({"leg": leg, "error": "Bad leg"})
+            continue
+
+        oid = _demo_new_order_id()
+        rec = _demo_order_record(oid, bid, basket_name, tsym, exchange, product,
+                                  side, qty, order_type, price, strategy_name)
+        rec["placed_at"] = _time_mod.time()
+        _DEMO_ORDERS[oid] = rec
+        placed.append(rec)
+
+        # Schedule simulated fill
+        asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.5)))
+
+    return JSONResponse({
+        "basket_id":   bid,
+        "basket_name": basket_name,
+        "placed":      placed,
+        "errors":      errors,
+    })
+
+
+@app.get("/execution/orders")
+async def demo_execution_orders():
+    orders = sorted(_DEMO_ORDERS.values(), key=lambda o: o["placed_at"], reverse=True)
+    return JSONResponse(list(orders))
+
+
+@app.post("/execution/cancel/{order_id}")
+async def demo_cancel(order_id: str):
+    rec = _DEMO_ORDERS.get(order_id)
+    if rec and rec["status"] == "OPEN":
+        rec["status"] = "CANCELLED"
+    return JSONResponse({"status": "ok"})
+
+
+@app.post("/execution/modify/{order_id}")
+async def demo_modify(order_id: str, request: Request):
+    data = await request.json()
+    rec = _DEMO_ORDERS.get(order_id)
+    if rec and rec["status"] == "OPEN":
+        rec["price"] = float(data.get("price", rec["price"] or 0))
+    return JSONResponse({"status": "ok"})

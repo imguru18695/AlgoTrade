@@ -1,0 +1,518 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ── Execution page ────────────────────────────────────────────────── */
+.exec-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+@media (max-width: 1100px) { .exec-layout { grid-template-columns: 1fr; } }
+
+/* Section headers */
+.section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+}
+.section-title { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+
+/* ── Order book table ──────────────────────────────────────────────── */
+.order-book-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+}
+.ob-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+}
+.ob-table th {
+    padding: 9px 14px; text-align: left;
+    font-size: 10.5px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.ob-table td {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    color: var(--text-2); font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+}
+.ob-table tr:last-child td { border-bottom: none; }
+.ob-table tr:hover td { background: var(--surface-hov); }
+.ob-table td.sym { color: var(--text); font-weight: 600; font-size: 12px; }
+
+/* Status badges */
+.status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.status-open         { background: rgba(124,58,237,0.12); color: var(--accent); border: 1px solid rgba(124,58,237,0.3); }
+.status-complete     { background: rgba(52,199,89,0.12);  color: var(--profit);  border: 1px solid rgba(52,199,89,0.3); }
+.status-rejected     { background: rgba(255,77,106,0.12); color: var(--loss);    border: 1px solid rgba(255,77,106,0.3); }
+.status-cancelled    { background: rgba(255,255,255,0.06); color: var(--text-3); border: 1px solid var(--border); }
+.status-open::before     { content:'●'; font-size:7px; animation: pulse 1.2s ease-in-out infinite; }
+.status-complete::before { content:'✓'; }
+.status-rejected::before { content:'✗'; }
+.status-cancelled::before { content:'○'; }
+@keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.35} }
+
+.side-buy  { color: var(--profit); font-weight: 700; }
+.side-sell { color: var(--loss);   font-weight: 700; }
+
+/* Action buttons in table */
+.ob-actions { display: flex; gap: 6px; }
+.btn-ob {
+    padding: 4px 10px; font-size: 11px; font-weight: 600;
+    border-radius: var(--radius-sm); cursor: pointer;
+    font-family: inherit; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--text-2);
+}
+.btn-ob:hover { border-color: var(--accent); color: var(--accent); }
+.btn-ob-cancel:hover { border-color: var(--loss); color: var(--loss); }
+
+/* Progress bar for fill */
+.fill-bar-wrap { display: flex; align-items: center; gap: 6px; }
+.fill-bar-bg {
+    flex: 1; height: 4px; background: var(--border);
+    border-radius: 2px; overflow: hidden; min-width: 40px;
+}
+.fill-bar { height: 100%; background: var(--accent-grad); border-radius: 2px; transition: width 0.4s; }
+.fill-text { font-size: 10.5px; color: var(--text-3); white-space: nowrap; }
+
+/* Empty state */
+.ob-empty {
+    padding: 48px; text-align: center; color: var(--text-3); font-size: 13px;
+}
+.ob-empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+/* Auto-refresh indicator */
+.refresh-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--profit); margin-right: 6px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ── Manual entry panel ────────────────────────────────────────────── */
+.entry-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+    align-self: start; position: sticky; top: 20px;
+}
+.ep-field { display: flex; flex-direction: column; gap: 5px; }
+.ep-field label {
+    font-size: 10.5px; font-weight: 700; color: var(--text-2);
+    text-transform: uppercase; letter-spacing: 0.07em;
+}
+.ep-field input, .ep-field select {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 13px; font-family: inherit; padding: 8px 12px;
+}
+.ep-field input:focus, .ep-field select:focus {
+    outline: none; border-color: var(--accent);
+}
+.ep-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-place {
+    width: 100%; padding: 11px; font-size: 13px; font-weight: 700;
+    background: var(--accent-grad); color: #fff; border: none;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+}
+.btn-place:hover { opacity: 0.88; }
+.btn-place:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Basket picker row */
+.basket-new-name { display: none; }
+.basket-new-name.show { display: block; }
+
+/* Toast */
+.ep-toast {
+    display: none; padding: 9px 12px; border-radius: var(--radius-sm);
+    font-size: 12px; font-weight: 600;
+}
+.ep-toast.ok  { background: rgba(52,199,89,0.12); color: var(--profit); border: 1px solid rgba(52,199,89,0.3); }
+.ep-toast.err { background: rgba(255,77,106,0.12); color: var(--loss);   border: 1px solid rgba(255,77,106,0.3); }
+
+/* Modify modal */
+.modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6); z-index: 1000;
+    align-items: center; justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+.modal-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; min-width: 320px;
+    display: flex; flex-direction: column; gap: 14px;
+}
+.modal-title { font-size: 14px; font-weight: 700; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+</style>
+
+<!-- Page header -->
+<div class="section-head" style="margin-bottom:20px;">
+    <span style="font-size:18px;font-weight:700;letter-spacing:-0.4px;">Execution</span>
+    <span style="font-size:12px;color:var(--text-3);">
+        <span class="refresh-dot"></span>Live order tracking · auto-refresh every 3s
+    </span>
+</div>
+
+<div class="exec-layout">
+    <!-- Order book -->
+    <div>
+        <div class="section-head">
+            <span class="section-title">Order Book</span>
+            <button class="btn-ghost" style="font-size:12px;" onclick="clearCompleted()">Clear completed</button>
+        </div>
+        <div class="order-book-wrap">
+            <table class="ob-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Strategy</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Filled</th>
+                        <th>Avg</th>
+                        <th>Basket</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="ob-tbody">
+                    {% if orders %}
+                        {% for o in orders %}
+                        <tr id="row-{{ o.order_id }}" data-status="{{ o.status }}">
+                            <td style="font-size:11px;color:var(--text-3)">
+                                {{ (o.placed_at | int | string)[:10] if o.placed_at else '—' }}
+                            </td>
+                            <td class="sym">{{ o.tradingsymbol }}</td>
+                            <td style="font-size:11px;color:var(--text-3)">{{ o.strategy_name or '—' }}</td>
+                            <td class="{{ 'side-buy' if o.side == 'BUY' else 'side-sell' }}">{{ o.side }}</td>
+                            <td>{{ o.qty }}</td>
+                            <td>{% if o.price %}₹{{ "%.2f"|format(o.price) }}{% else %}<span style="color:var(--text-3)">MKT</span>{% endif %}</td>
+                            <td>
+                                <div class="fill-bar-wrap">
+                                    <div class="fill-bar-bg">
+                                        <div class="fill-bar" style="width:{{ ((o.filled_qty or 0) / o.qty * 100)|int }}%"></div>
+                                    </div>
+                                    <span class="fill-text">{{ o.filled_qty or 0 }}/{{ o.qty }}</span>
+                                </div>
+                            </td>
+                            <td>{% if o.avg_price %}₹{{ "%.2f"|format(o.avg_price) }}{% else %}—{% endif %}</td>
+                            <td style="font-size:12px;">{{ o.basket_name or '—' }}</td>
+                            <td>
+                                <span class="status-badge status-{{ o.status | lower | replace(' ','') }}">
+                                    {{ o.status }}
+                                </span>
+                                {% if o.reject_reason %}
+                                <div style="font-size:10px;color:var(--loss);margin-top:3px;">{{ o.reject_reason }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="ob-actions">
+                                    {% if o.status == 'OPEN' %}
+                                    <button class="btn-ob" onclick="openModify('{{ o.order_id }}', {{ o.price or 0 }})">Modify</button>
+                                    <button class="btn-ob btn-ob-cancel" onclick="cancelOrder('{{ o.order_id }}')">Cancel</button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr id="ob-empty-row">
+                            <td colspan="11">
+                                <div class="ob-empty">
+                                    <div class="ob-empty-icon">📭</div>
+                                    No orders yet — place a strategy from the Strategies tab or use the manual entry form.
+                                </div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Manual entry panel -->
+    <div>
+        <div class="section-head">
+            <span class="section-title">Manual Order</span>
+        </div>
+        <div class="entry-panel">
+            <div class="ep-field">
+                <label>Symbol</label>
+                <input type="text" id="ep-sym" placeholder="e.g. NIFTY2561224500CE" autocomplete="off">
+            </div>
+            <div class="ep-row">
+                <div class="ep-field">
+                    <label>Exchange</label>
+                    <select id="ep-exch">
+                        <option value="NFO">NFO</option>
+                        <option value="NSE">NSE</option>
+                        <option value="BSE">BSE</option>
+                    </select>
+                </div>
+                <div class="ep-field">
+                    <label>Product</label>
+                    <select id="ep-product">
+                        <option value="NRML">NRML</option>
+                        <option value="MIS">MIS</option>
+                        <option value="CNC">CNC</option>
+                    </select>
+                </div>
+            </div>
+            <div class="ep-row">
+                <div class="ep-field">
+                    <label>Side</label>
+                    <select id="ep-side">
+                        <option value="BUY">BUY</option>
+                        <option value="SELL">SELL</option>
+                    </select>
+                </div>
+                <div class="ep-field">
+                    <label>Qty (lots × lot size)</label>
+                    <input type="number" id="ep-qty" value="25" min="1">
+                </div>
+            </div>
+            <div class="ep-row">
+                <div class="ep-field">
+                    <label>Order Type</label>
+                    <select id="ep-otype" onchange="onOrderTypeChange()">
+                        <option value="LIMIT">LIMIT</option>
+                        <option value="MARKET">MARKET</option>
+                    </select>
+                </div>
+                <div class="ep-field" id="ep-price-wrap">
+                    <label>Price</label>
+                    <input type="number" id="ep-price" step="0.05" placeholder="0.00">
+                </div>
+            </div>
+            <div class="ep-field">
+                <label>Basket</label>
+                <select id="ep-basket" onchange="onEpBasketChange()">
+                    <option value="new">➕ Create New Basket</option>
+                    {% for b in baskets %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="ep-basket-name" class="basket-new-name show"
+                    placeholder="New basket name (optional)">
+            </div>
+
+            <div class="ep-toast" id="ep-toast"></div>
+
+            <button class="btn-place" id="btn-place" onclick="placeManual()">
+                Place Order
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modify modal -->
+<div class="modal-backdrop" id="modify-modal">
+    <div class="modal-box">
+        <div class="modal-title">Modify Order</div>
+        <div class="ep-field">
+            <label>New Price</label>
+            <input type="number" id="modify-price" step="0.05">
+        </div>
+        <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModify()">Cancel</button>
+            <button class="btn-place" style="width:auto;padding:9px 24px;" onclick="submitModify()">Update</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Polling ────────────────────────────────────────────────────────────
+let _pollTimer = null;
+let _modifyOrderId = null;
+
+function startPolling() {
+    _pollTimer = setInterval(fetchOrders, 3000);
+}
+
+async function fetchOrders() {
+    try {
+        const r = await fetch('/execution/orders');
+        const orders = await r.json();
+        renderOrders(orders);
+    } catch(e) { /* silently skip on network error */ }
+}
+
+function _ts(t) {
+    if (!t) return '—';
+    const d = new Date(t * 1000);
+    return d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+
+function _statusClass(s) {
+    const m = {OPEN:'open', COMPLETE:'complete', REJECTED:'rejected',
+               CANCELLED:'cancelled', 'TRIGGER PENDING':'open'};
+    return 'status-' + (m[s] || 'open');
+}
+
+function renderOrders(orders) {
+    const tbody = document.getElementById('ob-tbody');
+    if (!orders || orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11">
+            <div class="ob-empty">
+                <div class="ob-empty-icon">📭</div>
+                No orders yet — place a strategy or use the manual entry form.
+            </div></td></tr>`;
+        return;
+    }
+    tbody.innerHTML = orders.map(o => {
+        const fillPct = o.qty > 0 ? Math.round((o.filled_qty || 0) / o.qty * 100) : 0;
+        const actions = (o.status === 'OPEN') ? `
+            <div class="ob-actions">
+                <button class="btn-ob" onclick="openModify('${o.order_id}', ${o.price || 0})">Modify</button>
+                <button class="btn-ob btn-ob-cancel" onclick="cancelOrder('${o.order_id}')">Cancel</button>
+            </div>` : '';
+        const rejectNote = o.reject_reason
+            ? `<div style="font-size:10px;color:var(--loss);margin-top:3px;">${o.reject_reason}</div>` : '';
+        return `<tr id="row-${o.order_id}" data-status="${o.status}">
+            <td style="font-size:11px;color:var(--text-3)">${_ts(o.placed_at)}</td>
+            <td class="sym">${o.tradingsymbol}</td>
+            <td style="font-size:11px;color:var(--text-3)">${o.strategy_name || '—'}</td>
+            <td class="${o.side === 'BUY' ? 'side-buy' : 'side-sell'}">${o.side}</td>
+            <td>${o.qty}</td>
+            <td>${o.price ? '₹' + o.price.toFixed(2) : '<span style="color:var(--text-3)">MKT</span>'}</td>
+            <td>
+                <div class="fill-bar-wrap">
+                    <div class="fill-bar-bg"><div class="fill-bar" style="width:${fillPct}%"></div></div>
+                    <span class="fill-text">${o.filled_qty || 0}/${o.qty}</span>
+                </div>
+            </td>
+            <td>${o.avg_price ? '₹' + o.avg_price.toFixed(2) : '—'}</td>
+            <td style="font-size:12px;">${o.basket_name || '—'}</td>
+            <td>
+                <span class="status-badge ${_statusClass(o.status)}">${o.status}</span>
+                ${rejectNote}
+            </td>
+            <td>${actions}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ── Cancel ────────────────────────────────────────────────────────────
+async function cancelOrder(orderId) {
+    if (!confirm('Cancel this order?')) return;
+    try {
+        await fetch(`/execution/cancel/${orderId}`, {method:'POST'});
+        fetchOrders();
+    } catch(e) { alert('Cancel failed: ' + e); }
+}
+
+// ── Modify ────────────────────────────────────────────────────────────
+function openModify(orderId, currentPrice) {
+    _modifyOrderId = orderId;
+    document.getElementById('modify-price').value = currentPrice.toFixed(2);
+    document.getElementById('modify-modal').classList.add('open');
+}
+function closeModify() {
+    _modifyOrderId = null;
+    document.getElementById('modify-modal').classList.remove('open');
+}
+async function submitModify() {
+    const price = parseFloat(document.getElementById('modify-price').value);
+    if (!price || price <= 0) { alert('Enter a valid price.'); return; }
+    try {
+        await fetch(`/execution/modify/${_modifyOrderId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({price}),
+        });
+        closeModify();
+        fetchOrders();
+    } catch(e) { alert('Modify failed: ' + e); }
+}
+document.getElementById('modify-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModify();
+});
+
+// ── Manual entry ──────────────────────────────────────────────────────
+function onOrderTypeChange() {
+    const ot = document.getElementById('ep-otype').value;
+    document.getElementById('ep-price-wrap').style.opacity = ot === 'MARKET' ? '0.4' : '1';
+}
+function onEpBasketChange() {
+    const v = document.getElementById('ep-basket').value;
+    document.getElementById('ep-basket-name').className =
+        'basket-new-name' + (v === 'new' ? ' show' : '');
+}
+
+async function placeManual() {
+    const sym    = document.getElementById('ep-sym').value.trim().toUpperCase();
+    const exch   = document.getElementById('ep-exch').value;
+    const prod   = document.getElementById('ep-product').value;
+    const side   = document.getElementById('ep-side').value;
+    const qty    = parseInt(document.getElementById('ep-qty').value) || 0;
+    const otype  = document.getElementById('ep-otype').value;
+    const price  = parseFloat(document.getElementById('ep-price').value) || null;
+    const basket = document.getElementById('ep-basket').value;
+    const bname  = document.getElementById('ep-basket-name').value.trim();
+
+    if (!sym)   { showEpToast('err', 'Enter a symbol.'); return; }
+    if (qty <= 0) { showEpToast('err', 'Enter a valid quantity.'); return; }
+    if (otype === 'LIMIT' && !price) { showEpToast('err', 'Enter a limit price.'); return; }
+
+    const btn = document.getElementById('btn-place');
+    btn.disabled = true; btn.textContent = 'Placing…';
+
+    try {
+        const r = await fetch('/execution/place', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                basket_id:     basket === 'new' ? null : parseInt(basket),
+                basket_name:   bname,
+                strategy_name: 'Manual',
+                legs: [{
+                    tradingsymbol: sym,
+                    exchange:      exch,
+                    product:       prod,
+                    side,
+                    qty,
+                    order_type:    otype,
+                    price:         otype === 'MARKET' ? null : price,
+                }],
+            }),
+        });
+        const data = await r.json();
+        if (data.errors && data.errors.length > 0) {
+            showEpToast('err', data.errors[0].error || 'Placement failed');
+        } else {
+            showEpToast('ok', `✓ Order placed → basket "${data.basket_name}"`);
+            document.getElementById('ep-sym').value = '';
+            fetchOrders();
+        }
+    } catch(e) {
+        showEpToast('err', 'Network error: ' + e.message);
+    }
+    btn.disabled = false; btn.textContent = 'Place Order';
+}
+
+function showEpToast(type, msg) {
+    const t = document.getElementById('ep-toast');
+    t.className = `ep-toast ${type}`;
+    t.textContent = msg; t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 5000);
+}
+
+// Clear completed
+function clearCompleted() {
+    document.querySelectorAll('#ob-tbody tr[data-status]').forEach(tr => {
+        const s = tr.dataset.status;
+        if (s === 'COMPLETE' || s === 'CANCELLED' || s === 'REJECTED') tr.remove();
+    });
+    if (document.querySelectorAll('#ob-tbody tr').length === 0) {
+        document.getElementById('ob-tbody').innerHTML = `<tr><td colspan="11">
+            <div class="ob-empty"><div class="ob-empty-icon">📭</div>No orders.</div>
+        </td></tr>`;
+    }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+startPolling();
+</script>
+{% endblock %}
