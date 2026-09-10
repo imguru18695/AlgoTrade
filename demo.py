@@ -465,21 +465,6 @@ async def management():
     return render("management.html", ctx)
 
 
-@app.get("/strategies", response_class=HTMLResponse)
-async def strategies_page():
-    expiries = _get_expiries()
-    baskets_list = [{"id": bid, "name": b["name"]} for bid, b in _baskets.items()]
-    return render("strategies.html", {
-        "request":    None,
-        "active_page": "strategies",
-        "underlyings": list(_UNDERLYINGS.keys()),
-        "expiries":   expiries,
-        "baskets":    baskets_list,
-        "demo_mode":  False,
-        "user_id":    "DEMO",
-    })
-
-
 @app.get("/api/expiries")
 async def api_expiries():
     return JSONResponse({"expiries": _get_expiries()})
