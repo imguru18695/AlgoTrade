@@ -20,10 +20,15 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 
 from rm.engine import run_engine, reset_basket, rearm_basket, get_basket_state
+from strategies import templates as strat_templates
+from strategies import engine as strat_engine
 
 logging.basicConfig(level=logging.INFO)
 
 _exit_log: list[dict] = []
+
+# ── Simulated India VIX ───────────────────────────────────────────────────────
+_VIX: float = 14.5   # drifts slowly with price loop
 
 # ── Token counter for demo positions ─────────────────────────────────────────
 _next_token_counter = 500000
@@ -223,17 +228,19 @@ _PRICES: dict[int, float] = {}   # instrument_token → live price
 
 
 async def _price_drift_loop():
-    """Randomly drift prices every 3 seconds to simulate live ticks."""
+    """Randomly drift prices and VIX every 3 seconds to simulate live ticks."""
+    global _VIX
     while True:
         await asyncio.sleep(3)
         for p in _POSITIONS:
             tok = p["instrument_token"]
             base = p["average_price"]
             current = _PRICES.get(tok, p["last_price"])
-            # drift ±0.5% per tick, clamped to ±40% of average
             drift = current * random.uniform(-0.005, 0.005)
             new_price = max(base * 0.6, min(base * 1.4, current + drift))
             _PRICES[tok] = round(new_price, 2)
+        # VIX slow drift ±0.1 per tick, clamped 10–25
+        _VIX = round(max(10.0, min(25.0, _VIX + random.uniform(-0.1, 0.1))), 2)
 
 
 @asynccontextmanager
@@ -248,6 +255,44 @@ async def lifespan(app: FastAPI):
         ltp_fn=_demo_ltp,
         exit_fn=_demo_exit,
     ))
+
+    # ── Strategy auto-execution engine ────────────────────────────────
+    async def _demo_place_orders_fn(tmpl: dict, legs: list) -> int:
+        """Demo: schedule simulated fills and return basket_id."""
+        global _next_basket_id
+        bid = _next_basket_id
+        _next_basket_id += 1
+        name = tmpl.get("name", f"Auto {bid}")
+        _baskets[bid] = {"id": bid, "name": name, "order_type": "LIMIT"}
+        _rm[bid] = _empty_rm()
+
+        for leg in legs:
+            oid = _demo_new_order_id()
+            rec = _demo_order_record(
+                oid, bid, name,
+                leg["tradingsymbol"], leg["exchange"], leg["product"],
+                leg["side"], leg["qty"], leg["order_type"], leg["price"],
+                strategy_name=strat_templates.STRATEGY_TYPES.get(
+                    tmpl.get("strategy_type", ""), tmpl.get("name", "Auto")),
+            )
+            rec["placed_at"] = _time_mod.time()
+            _DEMO_ORDERS[oid] = rec
+            asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.0)))
+
+        return bid
+
+    def _demo_set_rm_fn(basket_id: int, rm: dict):
+        _rm[basket_id] = rm
+
+    asyncio.create_task(strat_engine.run_strategy_engine(
+        get_templates_fn = strat_templates.list_templates,
+        get_vix_fn       = lambda: _VIX,
+        get_chain_fn     = _generate_chain,
+        place_orders_fn  = _demo_place_orders_fn,
+        set_rm_fn        = _demo_set_rm_fn,
+        set_status_fn    = strat_templates.set_status,
+    ))
+
     yield
 
 
@@ -806,3 +851,113 @@ async def demo_modify(order_id: str, request: Request):
     if rec and rec["status"] == "OPEN":
         rec["price"] = float(data.get("price", rec["price"] or 0))
     return JSONResponse({"status": "ok"})
+
+
+# ── Strategy template routes (demo) ──────────────────────────────────────────
+
+@app.get("/api/vix")
+async def api_vix():
+    return JSONResponse({"vix": _VIX})
+
+
+@app.get("/strategies", response_class=HTMLResponse)
+async def strategies_page():
+    expiries     = _get_expiries()
+    baskets_list = [{"id": bid, "name": b["name"]} for bid, b in _baskets.items()]
+    templates    = strat_templates.list_templates()
+    return render("strategies.html", {
+        "request":      None,
+        "active_page":  "strategies",
+        "underlyings":  list(_UNDERLYINGS.keys()),
+        "expiries":     expiries,
+        "baskets":      baskets_list,
+        "templates":    templates,
+        "strategy_types": strat_templates.STRATEGY_TYPES,
+        "expiry_rules": strat_templates.EXPIRY_RULES,
+        "vix":          _VIX,
+        "demo_mode":    False,
+        "user_id":      "DEMO",
+    })
+
+
+@app.post("/strategies/templates/create")
+async def create_template(request: Request):
+    data = await request.json()
+    t = strat_templates.create_template(data)
+    return JSONResponse({"status": "ok", "template": t})
+
+
+@app.post("/strategies/templates/{tid}/update")
+async def update_template(tid: int, request: Request):
+    data = await request.json()
+    t = strat_templates.update_template(tid, data)
+    if not t:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return JSONResponse({"status": "ok", "template": t})
+
+
+@app.post("/strategies/templates/{tid}/toggle")
+async def toggle_template(tid: int):
+    t = strat_templates.toggle_enabled(tid)
+    if not t:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return JSONResponse({"status": "ok", "template": t})
+
+
+@app.post("/strategies/templates/{tid}/delete")
+async def delete_template_route(tid: int):
+    strat_templates.delete_template(tid)
+    return JSONResponse({"status": "ok"})
+
+
+@app.post("/strategies/templates/{tid}/execute-now")
+async def execute_now(tid: int):
+    """Manually trigger a template immediately, bypassing time/VIX checks."""
+    global _next_basket_id
+    t = strat_templates.get_template(tid)
+    if not t:
+        return JSONResponse({"error": "Template not found"}, status_code=404)
+
+    from strategies.engine import execute_template
+    import time as _t
+
+    today_str = strat_engine.ist_now().strftime("%Y-%m-%d")
+
+    async def _place(tmpl, legs):
+        global _next_basket_id
+        bid = _next_basket_id
+        _next_basket_id += 1
+        name = tmpl.get("name", f"Auto {bid}")
+        _baskets[bid] = {"id": bid, "name": name, "order_type": "LIMIT"}
+        _rm[bid] = _empty_rm()
+        for leg in legs:
+            oid = _demo_new_order_id()
+            rec = _demo_order_record(
+                oid, bid, name,
+                leg["tradingsymbol"], leg["exchange"], leg["product"],
+                leg["side"], leg["qty"], leg["order_type"], leg["price"],
+                strategy_name=strat_templates.STRATEGY_TYPES.get(
+                    tmpl.get("strategy_type", ""), tmpl.get("name", "")),
+            )
+            rec["placed_at"] = _time_mod.time()
+            _DEMO_ORDERS[oid] = rec
+            asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.0)))
+        return bid
+
+    def _set_rm(basket_id, rm):
+        _rm[basket_id] = rm
+
+    try:
+        strat_templates.set_status(tid, "triggering", today_str, None)
+        bid = await execute_template(t, _generate_chain, _place, _set_rm)
+        strat_templates.set_status(tid, "active", today_str, bid)
+        basket_name = _baskets[bid]["name"]
+        return JSONResponse({"status": "ok", "basket_id": bid, "basket_name": basket_name})
+    except Exception as e:
+        strat_templates.set_status(tid, "error", today_str, None)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/strategies/templates")
+async def list_templates_api():
+    return JSONResponse(strat_templates.list_templates())

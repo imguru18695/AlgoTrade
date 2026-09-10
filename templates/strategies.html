@@ -2,187 +2,309 @@
 {% block content %}
 <style>
 /* ── Strategies page ──────────────────────────────────────────────── */
-.strat-page { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
-@media (max-width: 1100px) { .strat-page { grid-template-columns: 1fr; } }
 
-/* Config bar */
-.strat-config {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: flex-end;
-    gap: 16px;
-    flex-wrap: wrap;
+/* Page tabs */
+.page-tabs {
+    display: flex; gap: 0; margin-bottom: 20px;
+    border-bottom: 2px solid var(--border);
 }
-.cfg-group { display: flex; flex-direction: column; gap: 6px; }
-.cfg-group label {
-    font-size: 10.5px; font-weight: 700;
-    color: var(--text-2); text-transform: uppercase; letter-spacing: 0.07em;
+.page-tab {
+    padding: 10px 22px; font-size: 13px; font-weight: 600;
+    color: var(--text-2); cursor: pointer; border: none;
+    background: none; font-family: inherit;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: color 0.15s;
 }
-.cfg-group select {
+.page-tab:hover { color: var(--text); }
+.page-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── VIX bar ────────────────────────────────────────────────────────── */
+.vix-bar {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 20px; margin-bottom: 16px;
+}
+.vix-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
+.vix-value { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vix-low    { color: var(--profit); }
+.vix-mid    { color: var(--warn); }
+.vix-high   { color: var(--loss); }
+.vix-gauge  { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; max-width: 200px; }
+.vix-fill   { height: 100%; border-radius: 3px; transition: width 0.6s; }
+
+/* ── Template list ─────────────────────────────────────────────────── */
+.tmpl-list { display: flex; flex-direction: column; gap: 14px; }
+
+.tmpl-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    border-left: 3px solid transparent;
+}
+.tmpl-card.status-scheduled  { border-left-color: var(--border); }
+.tmpl-card.status-triggering { border-left-color: var(--warn); }
+.tmpl-card.status-active     { border-left-color: var(--profit); }
+.tmpl-card.status-error      { border-left-color: var(--loss); }
+.tmpl-card.status-paused     { border-left-color: var(--text-3); opacity: 0.65; }
+
+.tmpl-header {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: start; gap: 12px; padding: 16px 20px;
+}
+.tmpl-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.tmpl-meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+}
+.tmpl-chip {
+    font-size: 11px; padding: 3px 9px; border-radius: 20px;
+    background: var(--bg2); border: 1px solid var(--border); color: var(--text-2);
+}
+.tmpl-chip span { color: var(--text); font-weight: 600; }
+
+/* Status badge */
+.status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.pill-scheduled  { background: rgba(255,255,255,0.06); color: var(--text-3); border: 1px solid var(--border); }
+.pill-triggering { background: rgba(255,179,0,0.12); color: var(--warn); border: 1px solid rgba(255,179,0,0.3); }
+.pill-active     { background: rgba(52,199,89,0.12); color: var(--profit); border: 1px solid rgba(52,199,89,0.3); }
+.pill-active::before { content:'●'; font-size:7px; animation: pulse 1.2s ease-in-out infinite; }
+.pill-error      { background: rgba(255,77,106,0.12); color: var(--loss); border: 1px solid rgba(255,77,106,0.3); }
+.pill-paused     { background: rgba(255,255,255,0.06); color: var(--text-3); border: 1px solid var(--border); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+/* Template actions */
+.tmpl-actions {
+    display: flex; gap: 8px; padding: 0 20px 14px;
+    flex-wrap: wrap; align-items: center;
+}
+.btn-execute-now {
+    padding: 7px 18px; font-size: 12.5px; font-weight: 700;
+    background: var(--accent-grad); color: #fff; border: none;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+}
+.btn-execute-now:hover { opacity: 0.88; }
+.btn-execute-now:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-tmpl {
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg2); color: var(--text-2); cursor: pointer;
+    font-family: inherit;
+}
+.btn-tmpl:hover { border-color: var(--accent); color: var(--accent); }
+.btn-tmpl-del:hover { border-color: var(--loss); color: var(--loss); }
+.tmpl-result { font-size: 12px; font-weight: 600; padding: 4px 0; }
+.tmpl-result.ok  { color: var(--profit); }
+.tmpl-result.err { color: var(--loss); }
+
+/* ── Create / Edit form ─────────────────────────────────────────────── */
+.form-modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.65); z-index: 1000;
+    align-items: center; justify-content: center;
+}
+.form-modal-backdrop.open { display: flex; }
+.form-modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+    width: min(560px, 95vw); max-height: 90vh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 14px;
+}
+.form-modal h3 { font-size: 15px; font-weight: 700; margin: 0; }
+.fm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fm-field { display: flex; flex-direction: column; gap: 5px; }
+.fm-field label {
+    font-size: 10.5px; font-weight: 700; color: var(--text-2);
+    text-transform: uppercase; letter-spacing: 0.07em;
+}
+.fm-field input, .fm-field select {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius-sm); color: var(--text);
     font-size: 13px; font-family: inherit; padding: 8px 12px;
-    min-width: 160px; cursor: pointer;
 }
-.cfg-group select:focus { outline: none; border-color: var(--accent); }
-
-/* Strategy mode tabs */
-.strat-modes {
-    display: flex; gap: 8px; flex-wrap: wrap;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px 20px; margin-bottom: 16px;
-}
-.mode-btn {
-    padding: 7px 18px; border-radius: 20px; font-size: 12.5px;
-    font-weight: 600; font-family: inherit; cursor: pointer;
-    border: 1px solid var(--border); background: var(--bg2); color: var(--text-2);
-    transition: all 0.15s;
-}
-.mode-btn:hover { border-color: var(--accent); color: var(--accent); }
-.mode-btn.active {
-    background: var(--accent-grad); border-color: transparent; color: #fff;
-}
-
-/* Option chain table */
-.chain-wrap {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); overflow: hidden;
-}
-.chain-header {
-    display: grid; grid-template-columns: 1fr 110px 1fr;
-    background: rgba(0,0,0,0.2); padding: 10px 0;
+.fm-field input:focus, .fm-field select:focus { outline: none; border-color: var(--accent); }
+.fm-section {
     font-size: 10.5px; font-weight: 700; color: var(--text-3);
-    text-transform: uppercase; letter-spacing: 0.06em;
-    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.07em;
+    padding-bottom: 4px; border-bottom: 1px solid var(--border);
 }
+.fm-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+.btn-save {
+    padding: 9px 24px; font-size: 13px; font-weight: 700;
+    background: var(--accent-grad); color: #fff; border: none;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+}
+.btn-save:hover { opacity: 0.88; }
+
+/* ── Manual chain picker (unchanged) ───────────────────────────────── */
+.strat-page { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+@media (max-width: 1100px) { .strat-page { grid-template-columns: 1fr; } }
+.strat-config {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px;
+    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+}
+.cfg-group { display: flex; flex-direction: column; gap: 6px; }
+.cfg-group label { font-size: 10.5px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.07em; }
+.cfg-group select { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-family: inherit; padding: 8px 12px; min-width: 160px; cursor: pointer; }
+.cfg-group select:focus { outline: none; border-color: var(--accent); }
+.strat-modes { display: flex; gap: 8px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px; margin-bottom: 16px; }
+.mode-btn { padding: 7px 18px; border-radius: 20px; font-size: 12.5px; font-weight: 600; font-family: inherit; cursor: pointer; border: 1px solid var(--border); background: var(--bg2); color: var(--text-2); transition: all 0.15s; }
+.mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mode-btn.active { background: var(--accent-grad); border-color: transparent; color: #fff; }
+.chain-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.chain-header { display: grid; grid-template-columns: 1fr 110px 1fr; background: rgba(0,0,0,0.2); padding: 10px 0; font-size: 10.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
 .chain-header .col-ce { padding-left: 16px; }
 .chain-header .col-strike { text-align: center; }
 .chain-header .col-pe { text-align: right; padding-right: 16px; }
-
 .chain-body { max-height: 540px; overflow-y: auto; }
-.chain-row {
-    display: grid; grid-template-columns: 1fr 110px 1fr;
-    border-bottom: 1px solid var(--border); cursor: pointer;
-    transition: background 0.1s;
-}
+.chain-row { display: grid; grid-template-columns: 1fr 110px 1fr; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
 .chain-row:last-child { border-bottom: none; }
 .chain-row.atm-row { background: rgba(124,58,237,0.08); }
 .chain-row:hover { background: var(--surface-hov); }
 .chain-row.sel-ce .ce-side { background: rgba(52,199,89,0.12); }
 .chain-row.sel-pe .pe-side { background: rgba(255,77,106,0.12); }
-
-.ce-side, .pe-side {
-    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
-}
+.ce-side, .pe-side { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
 .pe-side { justify-content: flex-end; flex-direction: row-reverse; }
-
 .opt-ltp { font-size: 13px; font-weight: 700; min-width: 50px; font-variant-numeric: tabular-nums; }
 .opt-iv  { font-size: 11px; color: var(--text-2); min-width: 36px; font-variant-numeric: tabular-nums; }
 .opt-oi  { font-size: 10.5px; color: var(--text-3); min-width: 50px; font-variant-numeric: tabular-nums; }
-
 .ce-side .opt-ltp { color: var(--profit); }
 .pe-side .opt-ltp { color: var(--loss); }
-
-.strike-cell {
-    text-align: center; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    font-size: 12.5px; font-weight: 700; color: var(--text);
-    padding: 6px 4px;
-}
-.atm-badge {
-    font-size: 9px; font-weight: 800; color: var(--accent);
-    letter-spacing: 0.08em; text-transform: uppercase;
-}
-
-/* Spot / helper bar */
-.chain-info-bar {
-    display: flex; gap: 20px; align-items: center;
-    padding: 10px 16px; border-bottom: 1px solid var(--border);
-    font-size: 12px; color: var(--text-2);
-}
+.strike-cell { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; color: var(--text); padding: 6px 4px; }
+.atm-badge { font-size: 9px; font-weight: 800; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+.chain-info-bar { display: flex; gap: 20px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2); }
 .spot-val { font-size: 14px; font-weight: 700; color: var(--text); }
-
-/* ── Right panel ──────────────────────────────────────────────────── */
-.strat-panel {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 20px;
-    display: flex; flex-direction: column; gap: 16px;
-    align-self: start; position: sticky; top: 20px;
-}
-.panel-title {
-    font-size: 14px; font-weight: 700; color: var(--text);
-}
+.strat-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 16px; align-self: start; position: sticky; top: 20px; }
+.panel-title { font-size: 14px; font-weight: 700; color: var(--text); }
 .panel-hint { font-size: 12px; color: var(--text-3); line-height: 1.5; }
-
-/* Legs list */
 .legs-list { display: flex; flex-direction: column; gap: 8px; }
-.leg-row {
-    display: grid; grid-template-columns: 1fr auto auto;
-    align-items: center; gap: 8px;
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 8px 12px;
-}
+.leg-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; }
 .leg-sym { font-size: 12px; font-weight: 600; }
 .leg-side-buy  { color: var(--profit); font-size: 11px; font-weight: 700; }
 .leg-side-sell { color: var(--loss);   font-size: 11px; font-weight: 700; }
 .leg-ltp { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
-.leg-remove {
-    background: none; border: none; color: var(--text-3);
-    cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
-}
+.leg-remove { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
 .leg-remove:hover { color: var(--loss); }
-
-/* Entry fields */
 .entry-fields { display: flex; flex-direction: column; gap: 10px; }
 .entry-field { display: flex; flex-direction: column; gap: 5px; }
-.entry-field label {
-    font-size: 10.5px; font-weight: 700; color: var(--text-2);
-    text-transform: uppercase; letter-spacing: 0.07em;
-}
-.entry-field input, .entry-field select {
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); color: var(--text);
-    font-size: 13px; font-family: inherit; padding: 8px 12px;
-}
-.entry-field input:focus, .entry-field select:focus {
-    outline: none; border-color: var(--accent);
-}
-.basket-select-group { display: flex; flex-direction: column; gap: 5px; }
+.entry-field label { font-size: 10.5px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.07em; }
+.entry-field input, .entry-field select { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-family: inherit; padding: 8px 12px; }
+.entry-field input:focus, .entry-field select:focus { outline: none; border-color: var(--accent); }
 .new-basket-name { display: none; }
 .new-basket-name.show { display: block; }
-
-/* Execute button */
-.btn-execute {
-    width: 100%; padding: 12px; font-size: 14px; font-weight: 700;
-    background: var(--accent-grad); color: #fff; border: none;
-    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
-    letter-spacing: 0.02em;
-}
+.btn-execute { width: 100%; padding: 12px; font-size: 14px; font-weight: 700; background: var(--accent-grad); color: #fff; border: none; border-radius: var(--radius-sm); cursor: pointer; font-family: inherit; letter-spacing: 0.02em; }
 .btn-execute:hover { opacity: 0.88; }
 .btn-execute:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* Status toast */
-.strat-toast {
-    display: none; padding: 10px 14px; border-radius: var(--radius-sm);
-    font-size: 13px; font-weight: 600;
-}
+.strat-toast { display: none; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; }
 .strat-toast.ok  { background: rgba(52,199,89,0.12); color: var(--profit); border: 1px solid rgba(52,199,89,0.3); }
-.strat-toast.err { background: rgba(255,77,106,0.12); color: var(--loss);   border: 1px solid rgba(255,77,106,0.3); }
-
-/* Loading shimmer */
-.chain-loading {
-    padding: 40px; text-align: center; color: var(--text-3); font-size: 13px;
-}
+.strat-toast.err { background: rgba(255,77,106,0.12); color: var(--loss); border: 1px solid rgba(255,77,106,0.3); }
+.chain-loading { padding: 40px; text-align: center; color: var(--text-3); font-size: 13px; }
 </style>
 
-<div style="margin-bottom:20px;">
-    <span style="font-size:18px;font-weight:700;letter-spacing:-0.4px;">Pre-Built Strategies</span>
-    <span style="margin-left:12px;font-size:12px;color:var(--text-3);">Select a strategy, pick strikes from the chain, then execute.</span>
+<!-- Page header -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <span style="font-size:18px;font-weight:700;letter-spacing:-0.4px;">Strategies</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:12px;color:var(--text-3)">India VIX</span>
+        <span class="vix-value {% if vix < 14 %}vix-low{% elif vix < 20 %}vix-mid{% else %}vix-high{% endif %}"
+              id="vix-display">{{ "%.2f"|format(vix) }}</span>
+        <div class="vix-gauge">
+            <div class="vix-fill" id="vix-fill"
+                 style="width:{{ [(vix/30*100)|int, 100]|min }}%;
+                        background:{% if vix < 14 %}var(--profit){% elif vix < 20 %}var(--warn){% else %}var(--loss){% endif %}">
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Tabs -->
+<div class="page-tabs">
+    <button class="page-tab active" onclick="switchTab('playbook',this)">⚡ Playbook</button>
+    <button class="page-tab" onclick="switchTab('manual',this)">🔗 Manual Chain</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: PLAYBOOK                                                     -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="tab-playbook" class="tab-pane active">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <span style="font-size:13px;color:var(--text-2);">
+            Auto-executes at the configured time + VIX condition. RM is set automatically from premium collected.
+        </span>
+        <button class="btn-execute-now" style="padding:8px 20px;" onclick="openCreateForm()">
+            + New Strategy
+        </button>
+    </div>
+
+    <!-- Template list -->
+    <div class="tmpl-list" id="tmpl-list">
+        {% if templates %}
+            {% for t in templates %}
+            <div class="tmpl-card status-{{ t.status }}" id="tmpl-{{ t.id }}">
+                <div class="tmpl-header">
+                    <div>
+                        <div class="tmpl-name">{{ t.name }}</div>
+                        <div class="tmpl-meta">
+                            <span class="tmpl-chip">{{ strategy_types.get(t.strategy_type, t.strategy_type) }}</span>
+                            <span class="tmpl-chip"><span>{{ t.underlying }}</span></span>
+                            <span class="tmpl-chip">{{ expiry_rules.get(t.expiry_rule, t.expiry_rule) }}</span>
+                            <span class="tmpl-chip">Entry <span>{{ t.entry_time }} IST</span></span>
+                            <span class="tmpl-chip">{{ t.lots }} lot{{ 's' if t.lots != 1 else '' }}</span>
+                            {% if t.vix_min or t.vix_max %}
+                            <span class="tmpl-chip">VIX
+                                {% if t.vix_min %}<span>≥{{ t.vix_min }}</span>{% endif %}
+                                {% if t.vix_min and t.vix_max %}–{% endif %}
+                                {% if t.vix_max %}<span>≤{{ t.vix_max }}</span>{% endif %}
+                            </span>
+                            {% endif %}
+                            <span class="tmpl-chip">PT <span>{{ t.pt_pct }}%</span></span>
+                            <span class="tmpl-chip">LG <span>{{ t.lg_pct }}%</span></span>
+                            {% if t.eod_exit %}<span class="tmpl-chip">EOD Exit</span>{% endif %}
+                        </div>
+                        {% if t.last_triggered_date %}
+                        <div style="font-size:11px;color:var(--text-3);margin-top:6px;">
+                            Last run: {{ t.last_triggered_date }}
+                            {% if t.last_basket_id %}→ Basket #{{ t.last_basket_id }}{% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+                        <span class="status-pill pill-{{ t.status }}">{{ t.status | upper }}</span>
+                    </div>
+                </div>
+                <div class="tmpl-actions">
+                    <button class="btn-execute-now" onclick="executeNow({{ t.id }}, this)"
+                            {% if not t.enabled %}disabled{% endif %}>
+                        ▶ Execute Now
+                    </button>
+                    <button class="btn-tmpl" onclick="toggleTemplate({{ t.id }}, this)">
+                        {{ 'Pause' if t.enabled else 'Resume' }}
+                    </button>
+                    <button class="btn-tmpl" onclick="openEditForm({{ t | tojson }})">Edit</button>
+                    <button class="btn-tmpl btn-tmpl-del" onclick="deleteTemplate({{ t.id }})">Delete</button>
+                    <span class="tmpl-result" id="tmpl-result-{{ t.id }}"></span>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align:center;padding:48px;color:var(--text-3);">
+                <div style="font-size:28px;margin-bottom:8px;">🎯</div>
+                <div style="font-size:14px;font-weight:600;margin-bottom:6px;">No strategies yet</div>
+                <div style="font-size:12px;">Click <strong>+ New Strategy</strong> to configure your first auto-execution template.</div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: MANUAL CHAIN PICKER                                          -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="tab-manual" class="tab-pane">
 
 <!-- Config bar -->
 <div class="strat-config">
@@ -216,7 +338,6 @@
 
 <!-- Chain + panel -->
 <div class="strat-page">
-    <!-- Option chain -->
     <div>
         <div class="chain-wrap">
             <div class="chain-info-bar">
@@ -235,15 +356,11 @@
         </div>
     </div>
 
-    <!-- Right panel -->
     <div class="strat-panel">
         <div class="panel-title">📋 Strategy Legs</div>
         <div class="panel-hint" id="panel-hint">Select strikes from the chain to build your strategy.</div>
-
         <div class="legs-list" id="legs-list"></div>
-
         <hr style="border:none;border-top:1px solid var(--border);margin:0;">
-
         <div class="entry-fields">
             <div class="entry-field">
                 <label>Lots</label>
@@ -268,49 +385,282 @@
                     placeholder="Basket name (optional)">
             </div>
         </div>
-
         <div class="strat-toast" id="strat-toast"></div>
-
         <button class="btn-execute" id="btn-execute" onclick="executeStrategy()" disabled>
             Execute Strategy
         </button>
     </div>
 </div>
+</div><!-- end tab-manual -->
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- CREATE / EDIT MODAL                                               -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="form-modal-backdrop" id="form-modal-backdrop">
+<div class="form-modal">
+    <h3 id="form-modal-title">New Strategy</h3>
+
+    <div class="fm-section">Strategy Setup</div>
+    <div class="fm-grid">
+        <div class="fm-field" style="grid-column:1/-1;">
+            <label>Name</label>
+            <input type="text" id="fm-name" placeholder="e.g. NIFTY Daily Straddle">
+        </div>
+        <div class="fm-field">
+            <label>Strategy Type</label>
+            <select id="fm-type">
+                {% for k, v in strategy_types.items() %}
+                <option value="{{ k }}">{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="fm-field">
+            <label>Underlying</label>
+            <select id="fm-underlying">
+                {% for u in underlyings %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="fm-field">
+            <label>Expiry</label>
+            <select id="fm-expiry-rule">
+                {% for k, v in expiry_rules.items() %}
+                <option value="{{ k }}">{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="fm-field">
+            <label>Lots</label>
+            <input type="number" id="fm-lots" value="1" min="1">
+        </div>
+    </div>
+
+    <div class="fm-section">Entry Triggers</div>
+    <div class="fm-grid">
+        <div class="fm-field">
+            <label>Entry Time (IST)</label>
+            <input type="time" id="fm-entry-time" value="09:20">
+        </div>
+        <div class="fm-field" style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="fm-field">
+                <label>VIX Min (optional)</label>
+                <input type="number" id="fm-vix-min" step="0.1" placeholder="e.g. 12">
+            </div>
+            <div class="fm-field">
+                <label>VIX Max (optional)</label>
+                <input type="number" id="fm-vix-max" step="0.1" placeholder="e.g. 20">
+            </div>
+        </div>
+    </div>
+
+    <div class="fm-section">Risk Management (% of premium collected)</div>
+    <div class="fm-grid">
+        <div class="fm-field">
+            <label>Profit Target %</label>
+            <input type="number" id="fm-pt-pct" value="50" step="5" min="0" max="200">
+        </div>
+        <div class="fm-field">
+            <label>Loss Guard %</label>
+            <input type="number" id="fm-lg-pct" value="100" step="5" min="0" max="300">
+        </div>
+        <div class="fm-field" style="grid-column:1/-1;display:flex;align-items:center;gap:10px;">
+            <input type="checkbox" id="fm-eod-exit" checked style="width:16px;height:16px;">
+            <label style="text-transform:none;letter-spacing:0;font-size:13px;">EOD Exit (auto-exit at 3:10 PM)</label>
+        </div>
+    </div>
+
+    <div class="fm-actions">
+        <button class="btn-ghost" onclick="closeFormModal()">Cancel</button>
+        <button class="btn-save" onclick="saveTemplate()">Save Strategy</button>
+    </div>
+</div>
+</div>
 
 <script>
-// ── State ─────────────────────────────────────────────────────────────
-let _mode    = 'straddle';
-let _legs    = [];          // [{strike, opt_type, side, ltp, sym}]
-let _chain   = null;        // current chain data
+// ── Tab switching ─────────────────────────────────────────────────────
+function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.page-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    btn.classList.add('active');
+    if (tab === 'manual' && !_chain) loadChain();
+}
 
-// Strategy modes config
+// ── VIX live update ───────────────────────────────────────────────────
+async function refreshVix() {
+    try {
+        const r = await fetch('/api/vix');
+        const d = await r.json();
+        const v = d.vix;
+        const el = document.getElementById('vix-display');
+        const fill = document.getElementById('vix-fill');
+        el.textContent = v.toFixed(2);
+        el.className = 'vix-value ' + (v < 14 ? 'vix-low' : v < 20 ? 'vix-mid' : 'vix-high');
+        fill.style.width = Math.min(v/30*100, 100) + '%';
+        fill.style.background = v < 14 ? 'var(--profit)' : v < 20 ? 'var(--warn)' : 'var(--loss)';
+    } catch(e) {}
+}
+setInterval(refreshVix, 5000);
+
+// ── Template CRUD ─────────────────────────────────────────────────────
+let _editingId = null;
+
+function openCreateForm() {
+    _editingId = null;
+    document.getElementById('form-modal-title').textContent = 'New Strategy';
+    ['fm-name','fm-vix-min','fm-vix-max'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fm-type').value         = 'short_straddle';
+    document.getElementById('fm-underlying').value   = 'NIFTY';
+    document.getElementById('fm-expiry-rule').value  = 'nearest_weekly';
+    document.getElementById('fm-lots').value         = '1';
+    document.getElementById('fm-entry-time').value   = '09:20';
+    document.getElementById('fm-pt-pct').value       = '50';
+    document.getElementById('fm-lg-pct').value       = '100';
+    document.getElementById('fm-eod-exit').checked   = true;
+    document.getElementById('form-modal-backdrop').classList.add('open');
+}
+
+function openEditForm(t) {
+    _editingId = t.id;
+    document.getElementById('form-modal-title').textContent = 'Edit Strategy';
+    document.getElementById('fm-name').value          = t.name;
+    document.getElementById('fm-type').value          = t.strategy_type;
+    document.getElementById('fm-underlying').value    = t.underlying;
+    document.getElementById('fm-expiry-rule').value   = t.expiry_rule;
+    document.getElementById('fm-lots').value          = t.lots;
+    document.getElementById('fm-entry-time').value    = t.entry_time;
+    document.getElementById('fm-vix-min').value       = t.vix_min || '';
+    document.getElementById('fm-vix-max').value       = t.vix_max || '';
+    document.getElementById('fm-pt-pct').value        = t.pt_pct;
+    document.getElementById('fm-lg-pct').value        = t.lg_pct;
+    document.getElementById('fm-eod-exit').checked    = t.eod_exit;
+    document.getElementById('form-modal-backdrop').classList.add('open');
+}
+
+function closeFormModal() {
+    document.getElementById('form-modal-backdrop').classList.remove('open');
+}
+
+document.getElementById('form-modal-backdrop').addEventListener('click', function(e) {
+    if (e.target === this) closeFormModal();
+});
+
+function _collectForm() {
+    return {
+        name:           document.getElementById('fm-name').value.trim(),
+        strategy_type:  document.getElementById('fm-type').value,
+        underlying:     document.getElementById('fm-underlying').value,
+        expiry_rule:    document.getElementById('fm-expiry-rule').value,
+        lots:           parseInt(document.getElementById('fm-lots').value) || 1,
+        entry_time:     document.getElementById('fm-entry-time').value,
+        vix_min:        parseFloat(document.getElementById('fm-vix-min').value) || null,
+        vix_max:        parseFloat(document.getElementById('fm-vix-max').value) || null,
+        pt_pct:         parseFloat(document.getElementById('fm-pt-pct').value) || 50,
+        lg_pct:         parseFloat(document.getElementById('fm-lg-pct').value) || 100,
+        eod_exit:       document.getElementById('fm-eod-exit').checked,
+    };
+}
+
+async function saveTemplate() {
+    const data = _collectForm();
+    if (!data.name) { alert('Enter a strategy name.'); return; }
+
+    const url = _editingId
+        ? `/strategies/templates/${_editingId}/update`
+        : '/strategies/templates/create';
+
+    const r = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    });
+    const res = await r.json();
+    if (res.status === 'ok') {
+        closeFormModal();
+        location.reload();   // simple refresh to show new template
+    } else {
+        alert('Error: ' + (res.error || 'Unknown'));
+    }
+}
+
+async function toggleTemplate(tid, btn) {
+    const r = await fetch(`/strategies/templates/${tid}/toggle`, {method:'POST'});
+    const d = await r.json();
+    if (d.status === 'ok') {
+        const t = d.template;
+        const card = document.getElementById('tmpl-' + tid);
+        card.className = `tmpl-card status-${t.status}`;
+        btn.textContent = t.enabled ? 'Pause' : 'Resume';
+        card.querySelector('.status-pill').className = `status-pill pill-${t.status}`;
+        card.querySelector('.status-pill').textContent = t.status.toUpperCase();
+        card.querySelector('.btn-execute-now').disabled = !t.enabled;
+    }
+}
+
+async function deleteTemplate(tid) {
+    if (!confirm('Delete this strategy template?')) return;
+    await fetch(`/strategies/templates/${tid}/delete`, {method:'POST'});
+    document.getElementById('tmpl-' + tid)?.remove();
+}
+
+async function executeNow(tid, btn) {
+    btn.disabled = true; btn.textContent = '⏳ Executing…';
+    const resultEl = document.getElementById('tmpl-result-' + tid);
+    resultEl.textContent = '';
+
+    try {
+        const r = await fetch(`/strategies/templates/${tid}/execute-now`, {method:'POST'});
+        const d = await r.json();
+        if (r.ok && d.status === 'ok') {
+            resultEl.className = 'tmpl-result ok';
+            resultEl.textContent = `✓ Basket "${d.basket_name}" created → Execution tab`;
+            const card = document.getElementById('tmpl-' + tid);
+            card.className = 'tmpl-card status-active';
+            card.querySelector('.status-pill').className = 'status-pill pill-active';
+            card.querySelector('.status-pill').textContent = 'ACTIVE';
+        } else {
+            resultEl.className = 'tmpl-result err';
+            resultEl.textContent = '✗ ' + (d.error || 'Failed');
+        }
+    } catch(e) {
+        resultEl.className = 'tmpl-result err';
+        resultEl.textContent = '✗ Network error';
+    }
+    btn.textContent = '▶ Execute Now';
+    btn.disabled = false;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MANUAL CHAIN PICKER (existing logic)
+// ══════════════════════════════════════════════════════════════════════
+
+let _mode  = 'straddle';
+let _legs  = [];
+let _chain = null;
+
 const MODES = {
-    straddle:    { hint: 'Click a row to sell CE + PE at the same strike.', clicks: 1, both: true },
-    strangle:    { hint: 'Click CE column to sell CE, PE column to sell PE (different strikes).', clicks: 2 },
-    iron_condor: { hint: 'Step 1: Sell OTM CE. Step 2: Buy further OTM CE. Step 3: Sell OTM PE. Step 4: Buy further OTM PE.', clicks: 4 },
-    bull_spread: { hint: 'Click CE column: first = Buy (lower strike), second = Sell (higher strike).', clicks: 2 },
-    bear_spread: { hint: 'Click PE column: first = Buy (higher strike), second = Sell (lower strike).', clicks: 2 },
+    straddle:    { hint: 'Click a row to sell CE + PE at the same strike.' },
+    strangle:    { hint: 'Click CE column to sell CE, PE column to sell PE.' },
+    iron_condor: { hint: 'CE: Sell first → Buy wing. PE: Sell first → Buy wing.' },
+    bull_spread: { hint: 'CE: first click = Buy, second = Sell (higher strike).' },
+    bear_spread: { hint: 'PE: first click = Buy, second = Sell (lower strike).' },
 };
 
 function setMode(mode, btn) {
-    _mode = mode;
-    _legs = [];
+    _mode = mode; _legs = [];
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('chain-hint').textContent = MODES[mode].hint;
     document.getElementById('panel-hint').textContent = MODES[mode].hint;
-    renderLegs();
-    renderChainSelection();
+    renderLegs(); renderChainSelection();
 }
 
-// ── Chain loading ─────────────────────────────────────────────────────
 async function loadChain() {
     const sym = document.getElementById('cfg-symbol').value;
     const exp = document.getElementById('cfg-expiry').value;
     document.getElementById('chain-body').innerHTML = '<div class="chain-loading">Loading…</div>';
-    _chain = null;
-    _legs = [];
-    renderLegs();
+    _chain = null; _legs = []; renderLegs();
     try {
         const r = await fetch(`/api/chain/${sym}?expiry=${exp}`);
         _chain = await r.json();
@@ -324,20 +674,16 @@ function renderChain() {
     if (!_chain) return;
     document.getElementById('chain-spot').textContent = _chain.spot.toLocaleString('en-IN', {maximumFractionDigits:2});
     document.getElementById('chain-atm').textContent  = _chain.atm.toLocaleString('en-IN');
-
     const body = document.getElementById('chain-body');
     body.innerHTML = '';
     const fragment = document.createDocumentFragment();
-
     for (const s of _chain.strikes) {
         const row = document.createElement('div');
         row.className = 'chain-row' + (s.atm ? ' atm-row' : '');
         row.dataset.strike = s.strike;
         row.dataset.ceLtp  = s.ce.ltp;
         row.dataset.peLtp  = s.pe.ltp;
-
         const oi = v => v >= 1e6 ? (v/1e6).toFixed(1)+'L' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v;
-
         row.innerHTML = `
             <div class="ce-side" data-side="ce" onclick="onCellClick(${s.strike},'CE',${s.ce.ltp},this)">
                 <span class="opt-ltp">${s.ce.ltp.toFixed(2)}</span>
@@ -356,21 +702,15 @@ function renderChain() {
         fragment.appendChild(row);
     }
     body.appendChild(fragment);
-
-    // Scroll ATM into view
     const atmRow = body.querySelector('.atm-row');
     if (atmRow) atmRow.scrollIntoView({block:'center', behavior:'instant'});
     renderChainSelection();
 }
 
-// ── Click logic ───────────────────────────────────────────────────────
 function onCellClick(strike, optType, ltp, cell) {
     const sym = document.getElementById('cfg-symbol').value;
     const exp = document.getElementById('cfg-expiry').value;
-    const tsym = `${sym}${new Date(exp).toISOString().slice(2,4)}${new Date(exp).getMonth()+1}${new Date(exp).getDate()}${strike}${optType}`;
-
     if (_mode === 'straddle') {
-        // Sell CE + PE at clicked row (regardless of which side clicked)
         _legs = [
             {strike, opt_type:'CE', side:'SELL', ltp: parseFloat(cell.closest('.chain-row').dataset.ceLtp), sym: makeSym(sym,exp,strike,'CE')},
             {strike, opt_type:'PE', side:'SELL', ltp: parseFloat(cell.closest('.chain-row').dataset.peLtp), sym: makeSym(sym,exp,strike,'PE')},
@@ -397,8 +737,7 @@ function onCellClick(strike, optType, ltp, cell) {
         if (peLegs.length === 0) _legs.push({strike, opt_type:'PE', side:'BUY',  ltp, sym: makeSym(sym,exp,strike,'PE')});
         else if (peLegs.length === 1) _legs.push({strike, opt_type:'PE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'PE')});
     }
-    renderLegs();
-    renderChainSelection();
+    renderLegs(); renderChainSelection();
 }
 
 function addOrReplace(optType, leg) {
@@ -408,141 +747,83 @@ function addOrReplace(optType, leg) {
 
 function makeSym(sym, exp, strike, optType) {
     const d = new Date(exp);
-    const yy = String(d.getFullYear()).slice(2);
-    const m  = d.getMonth() + 1;
-    const dd = d.getDate();
-    return `${sym}${yy}${m}${dd}${strike}${optType}`;
+    return `${sym}${String(d.getFullYear()).slice(2)}${d.getMonth()+1}${d.getDate()}${strike}${optType}`;
 }
 
-function removeLeg(i) {
-    _legs.splice(i, 1);
-    renderLegs();
-    renderChainSelection();
-}
+function removeLeg(i) { _legs.splice(i,1); renderLegs(); renderChainSelection(); }
 
-// ── Render helpers ────────────────────────────────────────────────────
 function renderLegs() {
     const list = document.getElementById('legs-list');
     const hint = document.getElementById('panel-hint');
     const btn  = document.getElementById('btn-execute');
-
-    if (_legs.length === 0) {
-        list.innerHTML = '';
-        hint.style.display = 'block';
-        btn.disabled = true;
-        return;
-    }
-    hint.style.display = 'none';
-    btn.disabled = false;
-
-    const netPremium = _legs.reduce((acc, l) => {
-        return acc + (l.side === 'SELL' ? l.ltp : -l.ltp);
-    }, 0);
-
+    if (_legs.length === 0) { list.innerHTML = ''; hint.style.display='block'; btn.disabled=true; return; }
+    hint.style.display = 'none'; btn.disabled = false;
+    const net = _legs.reduce((a,l) => a + (l.side==='SELL'?l.ltp:-l.ltp), 0);
     list.innerHTML = _legs.map((l,i) => `
         <div class="leg-row">
-            <div>
-                <div class="leg-sym">${l.sym}</div>
-                <div style="font-size:11px;color:var(--text-3)">${l.opt_type}</div>
-            </div>
-            <span class="${l.side === 'BUY' ? 'leg-side-buy' : 'leg-side-sell'}">${l.side}</span>
+            <div><div class="leg-sym">${l.sym}</div><div style="font-size:11px;color:var(--text-3)">${l.opt_type}</div></div>
+            <span class="${l.side==='BUY'?'leg-side-buy':'leg-side-sell'}">${l.side}</span>
             <div style="display:flex;align-items:center;gap:8px">
                 <span class="leg-ltp">₹${l.ltp.toFixed(2)}</span>
-                <button class="leg-remove" onclick="removeLeg(${i})" title="Remove">✕</button>
+                <button class="leg-remove" onclick="removeLeg(${i})">✕</button>
             </div>
-        </div>
-    `).join('') + (netPremium !== 0 ? `
-        <div style="font-size:12px;color:var(--text-2);text-align:right;margin-top:4px;">
-            Net premium: <span style="font-weight:700;color:${netPremium>0?'var(--profit)':'var(--loss)'}">
-                ${netPremium>0?'+':''}₹${netPremium.toFixed(2)}</span> /lot
-        </div>` : '');
+        </div>`).join('') +
+        `<div style="font-size:12px;color:var(--text-2);text-align:right;margin-top:4px;">
+            Net: <span style="font-weight:700;color:${net>0?'var(--profit)':'var(--loss)'}">
+            ${net>0?'+':''}₹${net.toFixed(2)}</span>/lot</div>`;
 }
 
 function renderChainSelection() {
     document.querySelectorAll('.chain-row').forEach(row => {
         row.classList.remove('sel-ce','sel-pe');
         const strike = parseFloat(row.dataset.strike);
-        const hasCE = _legs.some(l => l.strike === strike && l.opt_type === 'CE');
-        const hasPE = _legs.some(l => l.strike === strike && l.opt_type === 'PE');
-        if (hasCE) row.classList.add('sel-ce');
-        if (hasPE) row.classList.add('sel-pe');
+        if (_legs.some(l => l.strike===strike && l.opt_type==='CE')) row.classList.add('sel-ce');
+        if (_legs.some(l => l.strike===strike && l.opt_type==='PE')) row.classList.add('sel-pe');
     });
 }
 
-// ── Execute ────────────────────────────────────────────────────────────
 async function executeStrategy() {
     if (_legs.length === 0) return;
     const btn = document.getElementById('btn-execute');
-    btn.disabled = true;
-    btn.textContent = 'Placing…';
-
-    const lots      = parseInt(document.getElementById('inp-lots').value) || 1;
+    btn.disabled = true; btn.textContent = 'Placing…';
+    const lots      = parseInt(document.getElementById('inp-lots').value)||1;
     const orderType = document.getElementById('inp-order-type').value;
     const basketId  = document.getElementById('inp-basket').value;
     const newName   = document.getElementById('inp-new-basket-name').value.trim();
-
+    const modeLabel = {straddle:'Short Straddle',strangle:'Short Strangle',iron_condor:'Iron Condor',bull_spread:'Bull Call Spread',bear_spread:'Bear Put Spread'}[_mode]||_mode;
+    const payload = {
+        basket_id: basketId==='new'?null:parseInt(basketId),
+        basket_name: newName || `${document.getElementById('cfg-symbol').value} ${modeLabel}`,
+        strategy_name: modeLabel,
+        legs: _legs.map(l => ({
+            tradingsymbol: l.sym, exchange:'NFO', product:'NRML',
+            side: l.side, qty: lots*(_chain?_chain.lot_size:25),
+            order_type: orderType, price: l.ltp,
+        })),
+    };
     try {
-        const sym = document.getElementById('cfg-symbol').value;
-        const exp = document.getElementById('cfg-expiry').value;
-        const modeLabel = {
-            straddle: 'Short Straddle', strangle: 'Short Strangle',
-            iron_condor: 'Iron Condor', bull_spread: 'Bull Call Spread',
-            bear_spread: 'Bear Put Spread',
-        }[_mode] || _mode;
-
-        const payload = {
-            basket_id:     basketId === 'new' ? null : parseInt(basketId),
-            basket_name:   newName || `${sym} ${modeLabel}`,
-            strategy_name: modeLabel,
-            legs: _legs.map(l => ({
-                tradingsymbol: l.sym,
-                exchange:      'NFO',
-                product:       'NRML',
-                side:          l.side,
-                qty:           lots * (_chain ? _chain.lot_size : 25),
-                order_type:    orderType,
-                price:         l.ltp,
-            })),
-        };
-
-        const r = await fetch('/execution/place', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload),
-        });
+        const r = await fetch('/execution/place', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
         const data = await r.json();
-        if (r.ok && (!data.errors || data.errors.length === 0)) {
-            showToast('ok', `✓ ${data.placed.length} order(s) sent to Execution → basket "${data.basket_name}". Redirecting…`);
-            _legs = [];
-            renderLegs();
-            renderChainSelection();
-            setTimeout(() => { window.location.href = '/execution'; }, 1800);
+        if (r.ok && (!data.errors||data.errors.length===0)) {
+            showToast('ok', `✓ ${data.placed.length} order(s) sent → basket "${data.basket_name}". Redirecting…`);
+            _legs=[]; renderLegs(); renderChainSelection();
+            setTimeout(()=>{ window.location.href='/execution'; }, 1800);
         } else {
-            const errMsg = (data.errors && data.errors[0]?.error) || data.error || 'Execution failed';
-            showToast('err', errMsg);
+            showToast('err', (data.errors&&data.errors[0]?.error)||data.error||'Execution failed');
         }
-    } catch(e) {
-        showToast('err', 'Network error — check server');
-    }
-    btn.textContent = 'Execute Strategy';
-    btn.disabled = (_legs.length === 0);
+    } catch(e) { showToast('err','Network error: '+e.message); }
+    btn.textContent='Execute Strategy'; btn.disabled=(_legs.length===0);
 }
 
 function showToast(type, msg) {
     const t = document.getElementById('strat-toast');
-    t.className = `strat-toast ${type}`;
-    t.textContent = msg;
-    t.style.display = 'block';
-    setTimeout(() => { t.style.display = 'none'; }, 6000);
+    t.className=`strat-toast ${type}`; t.textContent=msg; t.style.display='block';
+    setTimeout(()=>{ t.style.display='none'; }, 6000);
 }
 
 function onBasketChange() {
     const v = document.getElementById('inp-basket').value;
-    document.getElementById('inp-new-basket-name').className =
-        'new-basket-name' + (v === 'new' ? ' show' : '');
+    document.getElementById('inp-new-basket-name').className = 'new-basket-name'+(v==='new'?' show':'');
 }
-
-// Init
-loadChain();
 </script>
 {% endblock %}
