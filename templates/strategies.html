@@ -50,15 +50,39 @@
 .vix-stat-val.down { color: var(--profit); }
 .vix-stat-val.neutral { color: var(--text-2); }
 
-/* Right: gauge + 52W */
-.vix-gauge-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
-.vix-gauge-row  { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-2); }
-.vix-gauge-row strong { color: var(--text); font-weight: 700; }
-.vix-gauge { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.vix-fill  { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
-.vix-ma-row { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--border); margin-top: 2px; }
-.vix-ma { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-2); }
-.vix-ma span { font-weight: 700; color: var(--text); }
+/* Right: 52W slider */
+.vix-range-wrap { display: flex; flex-direction: column; gap: 10px; min-width: 180px; }
+.vix-range-title { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
+.vix-slider {
+    position: relative; height: 6px;
+    background: linear-gradient(to right, var(--profit), var(--warn) 55%, var(--loss));
+    border-radius: 3px; margin: 10px 0 6px;
+}
+.vix-slider-marker {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--text); border: 2px solid var(--surface);
+    box-shadow: 0 0 0 2px var(--text), 0 2px 6px rgba(0,0,0,0.4);
+    transition: left 0.8s ease;
+    z-index: 2;
+}
+.vix-slider-bubble {
+    position: absolute; bottom: calc(100% + 10px);
+    transform: translateX(-50%);
+    background: var(--text); color: var(--bg);
+    font-size: 10.5px; font-weight: 800; padding: 2px 7px;
+    border-radius: 4px; white-space: nowrap;
+    transition: left 0.8s ease;
+}
+.vix-slider-bubble::after {
+    content: ''; position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent; border-top-color: var(--text);
+}
+.vix-range-labels { display: flex; justify-content: space-between; }
+.vix-range-end { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.vix-range-end-tag  { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.vix-range-end-val  { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
 
 /* ── Template list ─────────────────────────────────────────────────── */
 .tmpl-list { display: flex; flex-direction: column; gap: 14px; }
@@ -285,19 +309,27 @@
         </div>
     </div>
 
-    <!-- Right: 52W gauge -->
-    <div class="vix-gauge-wrap">
-        <div class="vix-gauge-row">
-            <span>52W L: <strong>{{ vix_52w_low }}</strong></span>
-            <span>52W H: <strong>{{ vix_52w_high }}</strong></span>
+    <!-- Right: 52W slider -->
+    {% set _pct = [((vix - vix_52w_low) / (vix_52w_high - vix_52w_low) * 100)|int, 100]|min %}
+    {% set _pct = [_pct, 0]|max %}
+    <div class="vix-range-wrap">
+        <div class="vix-range-title">52-Week Range</div>
+        <div class="vix-slider" id="vix-slider">
+            <div class="vix-slider-bubble" id="vix-bubble"
+                 style="left:{{ _pct }}%">{{ "%.2f"|format(vix) }}</div>
+            <div class="vix-slider-marker" id="vix-marker"
+                 style="left:{{ _pct }}%"></div>
         </div>
-        <div class="vix-gauge">
-            <div class="vix-fill" id="vix-fill"
-                 style="width:{{ [((vix - vix_52w_low) / (vix_52w_high - vix_52w_low) * 100)|int, 100]|min }}%;
-                        background:{% if vix < 14 %}var(--profit){% elif vix < 20 %}var(--warn){% else %}var(--loss){% endif %}">
+        <div class="vix-range-labels">
+            <div class="vix-range-end">
+                <span class="vix-range-end-tag">52W Low</span>
+                <span class="vix-range-end-val" style="color:var(--profit)">{{ vix_52w_low }}</span>
+            </div>
+            <div class="vix-range-end">
+                <span class="vix-range-end-tag">52W High</span>
+                <span class="vix-range-end-val" style="color:var(--loss)">{{ vix_52w_high }}</span>
             </div>
         </div>
-        <div style="font-size:10px;color:var(--text-2);text-align:center;letter-spacing:0.03em;">Position within 52W range</div>
     </div>
 
 </div>
@@ -605,12 +637,13 @@ async function refreshVix() {
         set('vix-ema21', d.ema21.toFixed(2));
         set('vix-sma20', d.sma20.toFixed(2));
 
-        // 52W gauge
-        const fill = document.getElementById('vix-fill');
+        // 52W slider
         const pct = Math.max(0, Math.min(100,
-            (v - d.w52_low) / (d.w52_high - d.w52_low) * 100));
-        fill.style.width = pct + '%';
-        fill.style.background = col;
+            (v - d.w52_low) / (d.w52_high - d.w52_low) * 100)) + '%';
+        const marker = document.getElementById('vix-marker');
+        const bubble = document.getElementById('vix-bubble');
+        if (marker) marker.style.left = pct;
+        if (bubble) { bubble.style.left = pct; bubble.textContent = v.toFixed(2); }
     } catch(e) {}
 }
 setInterval(refreshVix, 5000);
