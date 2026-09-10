@@ -51,38 +51,45 @@
 .vix-stat-val.neutral { color: var(--text-2); }
 
 /* Right: 52W slider */
-.vix-range-wrap { display: flex; flex-direction: column; gap: 10px; min-width: 180px; }
+.vix-range-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 190px; }
 .vix-range-title { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
+/* give the slider track enough vertical room for the bubble below */
+.vix-slider-outer { position: relative; padding-bottom: 26px; }
 .vix-slider {
     position: relative; height: 6px;
     background: linear-gradient(to right, var(--profit), var(--warn) 55%, var(--loss));
-    border-radius: 3px; margin: 10px 0 6px;
+    border-radius: 3px;
 }
 .vix-slider-marker {
     position: absolute; top: 50%; transform: translate(-50%, -50%);
     width: 14px; height: 14px; border-radius: 50%;
     background: var(--text); border: 2px solid var(--surface);
-    box-shadow: 0 0 0 2px var(--text), 0 2px 6px rgba(0,0,0,0.4);
-    transition: left 0.8s ease;
-    z-index: 2;
+    box-shadow: 0 0 0 2px var(--text), 0 2px 6px rgba(0,0,0,0.35);
+    transition: left 0.8s ease; z-index: 2;
 }
+/* bubble sits BELOW the track */
 .vix-slider-bubble {
-    position: absolute; bottom: calc(100% + 10px);
+    position: absolute; top: calc(100% + 8px);
     transform: translateX(-50%);
     background: var(--text); color: var(--bg);
-    font-size: 10.5px; font-weight: 800; padding: 2px 7px;
+    font-size: 10px; font-weight: 800; padding: 2px 7px;
     border-radius: 4px; white-space: nowrap;
-    transition: left 0.8s ease;
+    transition: left 0.8s ease; line-height: 1.4;
 }
-.vix-slider-bubble::after {
-    content: ''; position: absolute; top: 100%; left: 50%;
+.vix-slider-bubble::before {
+    content: ''; position: absolute; bottom: 100%; left: 50%;
     transform: translateX(-50%);
-    border: 4px solid transparent; border-top-color: var(--text);
+    border: 4px solid transparent; border-bottom-color: var(--text);
 }
 .vix-range-labels { display: flex; justify-content: space-between; }
 .vix-range-end { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .vix-range-end-tag  { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
-.vix-range-end-val  { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
+.vix-range-end-val  { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Sparkline */
+.vix-sparkline-wrap { margin-top: 4px; }
+.vix-sparkline-label { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
+#vix-sparkline { display: block; width: 100%; height: 36px; overflow: visible; }
 
 /* ── Template list ─────────────────────────────────────────────────── */
 .tmpl-list { display: flex; flex-direction: column; gap: 14px; }
@@ -265,7 +272,7 @@
 {% set _chg_cls = 'up' if vix_chg_1d > 0 else ('down' if vix_chg_1d < 0 else 'flat') %}
 <div class="vix-panel">
 
-    <!-- Left: value + daily change -->
+    <!-- Left: value + change + sparkline -->
     <div class="vix-main">
         <span class="vix-title">India VIX</span>
         <span class="vix-value {{ _vc }}" id="vix-display">{{ "%.2f"|format(vix) }}</span>
@@ -273,6 +280,21 @@
             {{ '+' if vix_chg_1d > 0 else '' }}{{ "%.2f"|format(vix_chg_1d) }}
             ({{ '+' if vix_chg_1d_pct > 0 else '' }}{{ "%.2f"|format(vix_chg_1d_pct) }}%)
         </span>
+        <div class="vix-sparkline-wrap">
+            <div class="vix-sparkline-label">Trend</div>
+            <svg id="vix-sparkline" viewBox="0 0 120 36" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="currentColor" stop-opacity="0.25"/>
+                        <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+                    </linearGradient>
+                </defs>
+                <path id="spark-area" fill="url(#spark-grad)"/>
+                <polyline id="spark-line" fill="none" stroke="currentColor" stroke-width="1.5"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                <circle id="spark-dot" r="2.5" fill="currentColor"/>
+            </svg>
+        </div>
     </div>
 
     <!-- Centre: stat tiles -->
@@ -314,11 +336,13 @@
     {% set _pct = [_pct, 0]|max %}
     <div class="vix-range-wrap">
         <div class="vix-range-title">52-Week Range</div>
-        <div class="vix-slider" id="vix-slider">
+        <div class="vix-slider-outer">
+            <div class="vix-slider" id="vix-slider">
+                <div class="vix-slider-marker" id="vix-marker"
+                     style="left:{{ _pct }}%"></div>
+            </div>
             <div class="vix-slider-bubble" id="vix-bubble"
                  style="left:{{ _pct }}%">{{ "%.2f"|format(vix) }}</div>
-            <div class="vix-slider-marker" id="vix-marker"
-                 style="left:{{ _pct }}%"></div>
         </div>
         <div class="vix-range-labels">
             <div class="vix-range-end">
@@ -644,9 +668,45 @@ async function refreshVix() {
         const bubble = document.getElementById('vix-bubble');
         if (marker) marker.style.left = pct;
         if (bubble) { bubble.style.left = pct; bubble.textContent = v.toFixed(2); }
+
+        // Sparkline
+        if (d.history && d.history.length > 1) _drawSparkline(d.history, col);
     } catch(e) {}
 }
 setInterval(refreshVix, 5000);
+
+// ── Sparkline renderer ────────────────────────────────────────────────
+function _drawSparkline(pts, col) {
+    const W = 120, H = 36, PAD = 3;
+    const mn = Math.min(...pts), mx = Math.max(...pts);
+    const range = mx - mn || 1;
+    const n = pts.length;
+
+    const x = i => PAD + (i / (n - 1)) * (W - PAD * 2);
+    const y = v => H - PAD - ((v - mn) / range) * (H - PAD * 2);
+
+    const coords = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+
+    // Closed area path for gradient fill
+    const areaPath = `M${x(0).toFixed(1)},${H} ` +
+        pts.map((v, i) => `L${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ') +
+        ` L${x(n-1).toFixed(1)},${H} Z`;
+
+    const line   = document.getElementById('spark-line');
+    const area   = document.getElementById('spark-area');
+    const dot    = document.getElementById('spark-dot');
+    const svg    = document.getElementById('vix-sparkline');
+    if (!line) return;
+
+    svg.style.color = col;
+    line.setAttribute('points', coords);
+    area.setAttribute('d', areaPath);
+    dot.setAttribute('cx', x(n - 1).toFixed(1));
+    dot.setAttribute('cy', y(pts[n - 1]).toFixed(1));
+}
+
+// Draw on load with pre-seeded history
+refreshVix();
 
 // ── Template CRUD ─────────────────────────────────────────────────────
 let _editingId = null;

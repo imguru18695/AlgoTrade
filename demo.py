@@ -886,6 +886,7 @@ async def api_vix():
         "ema9":         _VIX_EMA9,
         "ema21":        _VIX_EMA21,
         "sma20":        _VIX_SMA20,
+        "history":      _VIX_HISTORY[-60:],   # last 60 ticks for sparkline
     })
 
 
