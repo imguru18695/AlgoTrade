@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Form, Request
+from fastapi import Body, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
@@ -887,6 +887,83 @@ async def api_vix():
         "ema21":        _VIX_EMA21,
         "sma20":        _VIX_SMA20,
         "history":      _VIX_HISTORY[-60:],   # last 60 ticks for sparkline
+    })
+
+
+@app.post("/api/precheck")
+async def api_precheck(payload: dict = Body(...)):
+    """
+    Pre-execution analytics: build legs, compute charges + Greeks, check margin.
+    Used by the Pre-built tab config panel to show stats before Save/Execute.
+    """
+    from strategies import greeks as _greeks
+    from datetime import date as _date
+
+    scrip    = payload.get("scrip", "NIFTY").upper()
+    expiry   = payload.get("expiry")
+    strategy = payload.get("strategy", "short_straddle")
+    lots     = int(payload.get("lots", 1) or 1)
+
+    expiries = _get_expiries()
+    if not expiry or expiry not in expiries:
+        expiry = expiries[0]
+
+    if scrip not in _UNDERLYINGS:
+        scrip = "NIFTY"
+
+    chain    = _generate_chain(scrip, expiry)
+    lot_size = chain["lot_size"]
+    qty      = lots * lot_size
+    spot     = chain["spot"]
+
+    try:
+        legs = strat_engine.build_legs(strategy, scrip, expiry, chain, qty, config=payload)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    dte_days = max((_date.fromisoformat(expiry) - _date.today()).days, 0)
+    r = 0.065
+
+    # Greeks per leg + aggregate
+    leg_greeks = []
+    agg = {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+    for l in legs:
+        g = _greeks.greeks_for_leg(spot, l["strike"], dte_days, r, l["price"], l["opt_type"], l["side"])
+        g["tradingsymbol"] = l["tradingsymbol"]
+        leg_greeks.append(g)
+        for k in ("delta", "gamma", "theta", "vega"):
+            agg[k] = round(agg[k] + g[k], 4)
+
+    # Charges (NSE options fee schedule)
+    brokerage = exchange = stt = sebi = gst = 0.0
+    for l in legs:
+        premium   = l["price"] * l["qty"]
+        brokerage += 20.0                                            # flat ₹20/order
+        stt       += round(premium * 0.001, 2) if l["side"] == "SELL" else 0.0
+        exchange  += round(premium * 0.000495, 2)
+        sebi      += round(premium * 1e-7, 2)
+    gst = round((brokerage + exchange + sebi) * 0.18, 2)
+    charges = {
+        "brokerage": round(brokerage, 2),
+        "stt":       round(stt, 2),
+        "exchange":  round(exchange, 2),
+        "sebi":      round(sebi, 2),
+        "gst":       round(gst, 2),
+        "total":     round(brokerage + stt + exchange + sebi + gst, 2),
+    }
+
+    return JSONResponse({
+        "legs": [
+            {k: l[k] for k in ("tradingsymbol", "exchange", "side", "qty", "price", "strike", "opt_type")}
+            for l in legs
+        ],
+        "charges":          charges,
+        "margin_required":  None,   # requires live Kite token
+        "margin_available": None,
+        "greeks":           {"per_leg": leg_greeks, "aggregate": agg},
+        "dte":              dte_days,
+        "spot":             round(spot, 2),
+        "lot_size":         lot_size,
     })
 
 

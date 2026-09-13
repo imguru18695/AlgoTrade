@@ -68,21 +68,36 @@ def _sym(symbol: str, expiry: str, strike: int, opt_type: str) -> str:
 
 
 def build_legs(strat_type: str, symbol: str, expiry: str,
-               chain: dict, qty: int) -> list[dict]:
+               chain: dict, qty: int, config: dict | None = None) -> list[dict]:
     """
     Return a list of leg dicts for the given strategy type.
     Each leg: {tradingsymbol, exchange, product, side, qty, order_type, price, strike, opt_type}
+
+    config keys consumed:
+        atm_strikes_to_sell  int  0      Range strikes each side of ATM (straddle only)
+        sell_offset          int  2      OTM offset for strangle/condor sell legs
+        wing_offset          int  4      OTM offset for condor/butterfly buy (hedge) legs
+        hedge                bool False  Add hedge legs (straddle→butterfly, strangle→condor)
+        hedge_offset         int  2      Extra strikes beyond sell for hedge legs
+        strike_shift         int  0      Shift entire structure N strikes (signed)
     """
+    cfg = config or {}
     strikes = chain["strikes"]
-    # Build strike → data lookup
     by_strike = {s["strike"]: s for s in strikes}
 
-    atm  = chain["atm"]
-    step = strikes[1]["strike"] - strikes[0]["strike"] if len(strikes) > 1 else 50
+    base_atm = chain["atm"]
+    step     = strikes[1]["strike"] - strikes[0]["strike"] if len(strikes) > 1 else 50
 
-    atm_data = by_strike.get(atm)
-    if not atm_data:
-        raise ValueError(f"ATM strike {atm} not in chain")
+    # Apply global strike shift
+    shift    = int(cfg.get("strike_shift", 0))
+    atm      = base_atm + shift * step
+
+    # Config params
+    atm_n        = int(cfg.get("atm_strikes_to_sell", 0))  # range width for straddle
+    sell_off     = int(cfg.get("sell_offset",  2))
+    wing_off     = int(cfg.get("wing_offset",  4))
+    hedge        = bool(cfg.get("hedge",        False))
+    hedge_off    = int(cfg.get("hedge_offset", 2))
 
     def leg(strike, opt_type, side):
         data = by_strike.get(strike)
@@ -101,39 +116,65 @@ def build_legs(strat_type: str, symbol: str, expiry: str,
             "opt_type":      opt_type,
         }
 
+    # ── Short Straddle ────────────────────────────────────────────────
     if strat_type == "short_straddle":
-        return [
-            leg(atm, "CE", "SELL"),
-            leg(atm, "PE", "SELL"),
-        ]
+        legs = []
+        # Range strikes: original ± 0..atm_n  (total 2*atm_n+1 strike pairs)
+        for n in range(-atm_n, atm_n + 1):
+            s = atm + n * step
+            legs.append(leg(s, "CE", "SELL"))
+            legs.append(leg(s, "PE", "SELL"))
+        # Optional hedge: outermost wings BUY
+        if hedge:
+            outer = atm_n + hedge_off
+            legs.append(leg(atm + outer * step, "CE", "BUY"))
+            legs.append(leg(atm - outer * step, "PE", "BUY"))
+        return legs
 
+    # ── Short Strangle ────────────────────────────────────────────────
     if strat_type == "short_strangle":
-        # Default: 2 strikes OTM on each side
-        otm = 2
-        return [
-            leg(atm + step * otm, "CE", "SELL"),
-            leg(atm - step * otm, "PE", "SELL"),
+        legs = [
+            leg(atm + step * sell_off, "CE", "SELL"),
+            leg(atm - step * sell_off, "PE", "SELL"),
         ]
+        if hedge:
+            outer = sell_off + hedge_off
+            legs.append(leg(atm + step * outer, "CE", "BUY"))
+            legs.append(leg(atm - step * outer, "PE", "BUY"))
+        return legs
 
+    # ── Iron Condor ───────────────────────────────────────────────────
     if strat_type == "iron_condor":
-        otm, wing = 2, 4
         return [
-            leg(atm + step * otm,  "CE", "SELL"),
-            leg(atm + step * wing, "CE", "BUY"),
-            leg(atm - step * otm,  "PE", "SELL"),
-            leg(atm - step * wing, "PE", "BUY"),
+            leg(atm + step * sell_off, "CE", "SELL"),
+            leg(atm + step * wing_off, "CE", "BUY"),
+            leg(atm - step * sell_off, "PE", "SELL"),
+            leg(atm - step * wing_off, "PE", "BUY"),
         ]
 
+    # ── Iron Butterfly ────────────────────────────────────────────────
+    if strat_type == "iron_butterfly":
+        return [
+            leg(atm,                    "CE", "SELL"),
+            leg(atm,                    "PE", "SELL"),
+            leg(atm + step * wing_off,  "CE", "BUY"),
+            leg(atm - step * wing_off,  "PE", "BUY"),
+        ]
+
+    # ── Bull Call Spread ──────────────────────────────────────────────
     if strat_type == "bull_spread":
+        spread = int(cfg.get("spread_width", 1))
         return [
-            leg(atm,        "CE", "BUY"),
-            leg(atm + step, "CE", "SELL"),
+            leg(atm,               "CE", "BUY"),
+            leg(atm + step * spread, "CE", "SELL"),
         ]
 
+    # ── Bear Put Spread ───────────────────────────────────────────────
     if strat_type == "bear_spread":
+        spread = int(cfg.get("spread_width", 1))
         return [
-            leg(atm,        "PE", "BUY"),
-            leg(atm - step, "PE", "SELL"),
+            leg(atm,               "PE", "BUY"),
+            leg(atm - step * spread, "PE", "SELL"),
         ]
 
     raise ValueError(f"Unknown strategy type: {strat_type}")

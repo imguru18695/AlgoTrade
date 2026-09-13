@@ -251,6 +251,96 @@
 .strat-toast.ok  { background: rgba(52,199,89,0.12); color: var(--profit); border: 1px solid rgba(52,199,89,0.3); }
 .strat-toast.err { background: rgba(255,77,106,0.12); color: var(--loss); border: 1px solid rgba(255,77,106,0.3); }
 .chain-loading { padding: 40px; text-align: center; color: var(--text-3); font-size: 13px; }
+
+/* Ensure hidden attribute works even on flex/grid containers */
+[hidden] { display: none !important; }
+
+/* ── Pre-built tab ──────────────────────────────────────────────────── */
+.pb-selector {
+    display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px;
+}
+.pb-sel-group { display: flex; flex-direction: column; gap: 5px; }
+.pb-sel-label { font-size: 10.5px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.07em; }
+.pb-selector select {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-size: 13px; font-family: inherit; padding: 8px 12px; min-width: 150px; cursor: pointer;
+}
+.pb-selector select:focus { outline: none; border-color: var(--accent); }
+.btn-pb-configure {
+    padding: 9px 22px; font-size: 13px; font-weight: 700;
+    background: var(--accent-grad); color: #fff; border: none;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+    align-self: flex-end;
+}
+.btn-pb-configure:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-pb-configure:not(:disabled):hover { opacity: 0.88; }
+
+/* Config panel */
+.pb-config-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px;
+}
+.pb-section-title {
+    font-size: 10.5px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.07em;
+    padding-bottom: 4px; border-bottom: 1px solid var(--border);
+    margin-top: 4px;
+}
+.pb-config-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;
+}
+.pb-field { display: flex; flex-direction: column; gap: 5px; }
+.pb-field label {
+    font-size: 10.5px; font-weight: 700; color: var(--text-2);
+    text-transform: uppercase; letter-spacing: 0.07em;
+}
+.pb-field input, .pb-field select {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 13px; font-family: inherit; padding: 8px 12px;
+}
+.pb-field input:focus, .pb-field select:focus { outline: none; border-color: var(--accent); }
+.pb-checkbox-field label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text);
+    cursor: pointer;
+}
+.pb-checkbox-field input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+.pb-tip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%; font-size: 9px; font-weight: 800;
+    background: var(--bg2); border: 1px solid var(--border); color: var(--text-3);
+    cursor: help; vertical-align: middle;
+}
+
+/* Pre-execution panel */
+.pb-precheck-panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 12px;
+}
+.pb-precheck-loading { font-size: 12px; color: var(--text-3); }
+.pb-precheck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.pb-stat-block { display: flex; flex-direction: column; gap: 4px; }
+.pb-stat-label { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
+.pb-stat-val   { font-size: 13px; font-weight: 700; color: var(--text); }
+.pb-stat-sub   { font-size: 11px; color: var(--text-2); }
+.pb-order-table { width: 100%; border-collapse: collapse; font-size: 12px; grid-column: 1/-1; }
+.pb-order-table th { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.pb-order-table td { padding: 5px 8px; color: var(--text-2); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border); }
+.pb-order-table tr:last-child td { border-bottom: none; }
+.pb-order-table .t-sell { color: var(--loss); font-weight: 700; }
+.pb-order-table .t-buy  { color: var(--profit); font-weight: 700; }
+
+.pb-actions {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px;
+}
+.pb-action-result { font-size: 12px; font-weight: 600; }
+.pb-action-result.ok  { color: var(--profit); }
+.pb-action-result.err { color: var(--loss); }
 </style>
 
 <!-- Page header -->
@@ -370,25 +460,184 @@
 
 <!-- Tabs -->
 <div class="page-tabs">
-    <button class="page-tab active" onclick="switchTab('playbook',this)">⚡ Playbook</button>
-    <button class="page-tab" onclick="switchTab('manual',this)">🔗 Manual Chain</button>
+    <button class="page-tab active" onclick="switchTab('prebuilt',this)">Pre-built</button>
+    <button class="page-tab" onclick="switchTab('manual',this)">Manual</button>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════ -->
-<!-- TAB: PLAYBOOK                                                     -->
+<!-- TAB: PRE-BUILT                                                    -->
 <!-- ══════════════════════════════════════════════════════════════════ -->
-<div id="tab-playbook" class="tab-pane active">
+<div id="tab-prebuilt" class="tab-pane active">
 
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <span style="font-size:13px;color:var(--text-2);">
-            Auto-executes at the configured time + VIX condition. RM is set automatically from premium collected.
-        </span>
-        <button class="btn-execute-now" style="padding:8px 20px;" onclick="openCreateForm()">
-            + New Strategy
-        </button>
+<!-- Stage 1: Selector row -->
+<div class="pb-selector" id="pb-selector">
+    <div class="pb-sel-group">
+        <label class="pb-sel-label">Scrip</label>
+        <select id="pb-scrip" onchange="pbOnSelectorChange()">
+            {% for u in underlyings %}
+            <option value="{{ u }}">{{ u }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="pb-sel-group">
+        <label class="pb-sel-label">Expiry</label>
+        <select id="pb-expiry" onchange="pbOnSelectorChange()">
+            {% for e in expiries %}
+            <option value="{{ e }}">{{ e }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="pb-sel-group">
+        <label class="pb-sel-label">Strategy</label>
+        <select id="pb-strategy" onchange="pbOnSelectorChange()">
+            {% for k, v in strategy_types.items() %}
+            <option value="{{ k }}">{{ v }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button class="btn-pb-configure" id="pb-configure-btn" onclick="pbShowConfig()" disabled>
+        Configure
+    </button>
+</div>
+
+<!-- Stage 2: Config panel (hidden until Configure clicked) -->
+<div class="pb-config-panel" id="pb-config-panel" hidden>
+
+    <!-- Section A: Strike Config -->
+    <div class="pb-section-title">Strike Configuration</div>
+    <div class="pb-config-grid" id="pb-strike-section">
+        <!-- Short Straddle -->
+        <div class="pb-field" id="pbc-atm-n" hidden>
+            <label>ATM Strikes to Sell <span class="pb-tip" title="Range strikes each side of ATM. 0 = ATM only, 1 = ATM ±1, etc.">?</span></label>
+            <input type="number" id="pbc-atm-strikes" value="0" min="0" max="5" oninput="pbSchedulePrecheck()">
+        </div>
+        <!-- Strangle / Condor sell offset -->
+        <div class="pb-field" id="pbc-sell-off" hidden>
+            <label>Sell Offset (strikes OTM)</label>
+            <input type="number" id="pbc-sell-offset" value="2" min="1" max="10" oninput="pbSchedulePrecheck()">
+        </div>
+        <!-- Wing offset -->
+        <div class="pb-field" id="pbc-wing-off" hidden>
+            <label>Wing Offset (strikes OTM)</label>
+            <input type="number" id="pbc-wing-offset" value="4" min="1" max="15" oninput="pbSchedulePrecheck()">
+        </div>
+        <!-- Spread width (bull/bear spreads) -->
+        <div class="pb-field" id="pbc-spread-w" hidden>
+            <label>Spread Width (strikes)</label>
+            <input type="number" id="pbc-spread-width" value="1" min="1" max="10" oninput="pbSchedulePrecheck()">
+        </div>
     </div>
 
-    <!-- Template list -->
+    <!-- Section B: Hedge (straddle/strangle only) -->
+    <div id="pbc-hedge-section" hidden>
+        <div class="pb-section-title">Hedge</div>
+        <div class="pb-config-grid">
+            <div class="pb-field pb-checkbox-field">
+                <label>
+                    <input type="checkbox" id="pbc-hedge" onchange="pbOnHedgeChange()">
+                    Add hedge legs <span class="pb-tip" title="If true, system adds OTM BUY legs — converts Straddle to Iron Butterfly, Strangle to Iron Condor">?</span>
+                </label>
+            </div>
+            <div class="pb-field" id="pbc-hedge-off-field" hidden>
+                <label>Hedge Offset (extra strikes)</label>
+                <input type="number" id="pbc-hedge-offset" value="2" min="1" max="10" oninput="pbSchedulePrecheck()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Section C: Move Strikes -->
+    <div class="pb-section-title">Strike Adjustment</div>
+    <div class="pb-config-grid">
+        <div class="pb-field pb-checkbox-field">
+            <label>
+                <input type="checkbox" id="pbc-shift-toggle" onchange="pbOnShiftChange()">
+                Shift strikes from ATM <span class="pb-tip" title="Move entire structure N strikes up (+) or down (-) from ATM">?</span>
+            </label>
+        </div>
+        <div class="pb-field" id="pbc-shift-field" hidden>
+            <label>Shift by (strikes, signed)</label>
+            <input type="number" id="pbc-strike-shift" value="0" oninput="pbSchedulePrecheck()">
+        </div>
+    </div>
+
+    <!-- Section D: Lots & Order -->
+    <div class="pb-section-title">Lots &amp; Order</div>
+    <div class="pb-config-grid">
+        <div class="pb-field">
+            <label>Lots <span class="pb-tip" title="Number of lots per leg">?</span></label>
+            <input type="number" id="pbc-lots" value="1" min="1" max="50" oninput="pbOnLotsChange()">
+        </div>
+        <div class="pb-field">
+            <label>Max Lots per Order <span class="pb-tip" title="Split large orders — defaults to Lots">?</span></label>
+            <input type="number" id="pbc-max-lots" value="1" min="1" max="50" oninput="pbSchedulePrecheck()">
+        </div>
+    </div>
+
+    <!-- Section E: Entry Triggers -->
+    <div class="pb-section-title">Entry Triggers</div>
+    <div class="pb-config-grid">
+        <div class="pb-field">
+            <label>Entry Time (IST)</label>
+            <input type="time" id="pbc-entry-time" value="09:20">
+        </div>
+        <div class="pb-field">
+            <label>VIX Min</label>
+            <input type="number" id="pbc-vix-min" step="0.5" placeholder="e.g. 12">
+        </div>
+        <div class="pb-field">
+            <label>VIX Max</label>
+            <input type="number" id="pbc-vix-max" step="0.5" placeholder="e.g. 20">
+        </div>
+    </div>
+
+    <!-- Section F: Risk Management -->
+    <div class="pb-section-title">Risk Management</div>
+    <div class="pb-config-grid">
+        <div class="pb-field">
+            <label>Profit Target % of premium</label>
+            <input type="number" id="pbc-pt-pct" value="50" step="5" min="0">
+        </div>
+        <div class="pb-field">
+            <label>Loss Guard % of premium</label>
+            <input type="number" id="pbc-lg-pct" value="100" step="5" min="0">
+        </div>
+        <div class="pb-field pb-checkbox-field" style="grid-column:1/-1">
+            <label>
+                <input type="checkbox" id="pbc-eod-exit" checked>
+                EOD exit at 3:10 PM
+            </label>
+        </div>
+    </div>
+
+    <!-- Section G: Strategy Name -->
+    <div class="pb-section-title">Name</div>
+    <div class="pb-config-grid">
+        <div class="pb-field" style="grid-column:1/-1">
+            <label>Strategy Name</label>
+            <input type="text" id="pbc-name" placeholder="e.g. NIFTY Daily Straddle">
+        </div>
+    </div>
+
+    <!-- Pre-execution stats panel -->
+    <div class="pb-precheck-panel" id="pb-precheck-panel" hidden>
+        <div class="pb-section-title" style="margin-top:0;">Pre-execution</div>
+        <div class="pb-precheck-grid" id="pb-precheck-content">
+            <div class="pb-precheck-loading" id="pb-precheck-loading">Fetching stats...</div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="pb-actions">
+        <button class="btn-ghost" onclick="pbReset()">Reset</button>
+        <button class="btn-save" onclick="pbSave()">Save</button>
+        <button class="btn-execute-now" onclick="pbExecuteNow()">Execute Now</button>
+        <span class="pb-action-result" id="pb-action-result"></span>
+    </div>
+</div>
+
+<!-- Template list -->
+<div style="margin-top:24px;">
+    <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px;">Saved Strategies</div>
     <div class="tmpl-list" id="tmpl-list">
         {% if templates %}
             {% for t in templates %}
@@ -404,9 +653,9 @@
                             <span class="tmpl-chip">{{ t.lots }} lot{{ 's' if t.lots != 1 else '' }}</span>
                             {% if t.vix_min or t.vix_max %}
                             <span class="tmpl-chip">VIX
-                                {% if t.vix_min %}<span>≥{{ t.vix_min }}</span>{% endif %}
-                                {% if t.vix_min and t.vix_max %}–{% endif %}
-                                {% if t.vix_max %}<span>≤{{ t.vix_max }}</span>{% endif %}
+                                {% if t.vix_min %}<span>&ge;{{ t.vix_min }}</span>{% endif %}
+                                {% if t.vix_min and t.vix_max %}&ndash;{% endif %}
+                                {% if t.vix_max %}<span>&le;{{ t.vix_max }}</span>{% endif %}
                             </span>
                             {% endif %}
                             <span class="tmpl-chip">PT <span>{{ t.pt_pct }}%</span></span>
@@ -416,7 +665,7 @@
                         {% if t.last_triggered_date %}
                         <div style="font-size:11px;color:var(--text-3);margin-top:6px;">
                             Last run: {{ t.last_triggered_date }}
-                            {% if t.last_basket_id %}→ Basket #{{ t.last_basket_id }}{% endif %}
+                            {% if t.last_basket_id %}&rarr; Basket #{{ t.last_basket_id }}{% endif %}
                         </div>
                         {% endif %}
                     </div>
@@ -427,12 +676,11 @@
                 <div class="tmpl-actions">
                     <button class="btn-execute-now" onclick="executeNow({{ t.id }}, this)"
                             {% if not t.enabled %}disabled{% endif %}>
-                        ▶ Execute Now
+                        Execute Now
                     </button>
                     <button class="btn-tmpl" onclick="toggleTemplate({{ t.id }}, this)">
                         {{ 'Pause' if t.enabled else 'Resume' }}
                     </button>
-                    <button class="btn-tmpl" onclick="openEditForm({{ t | tojson }})">Edit</button>
                     <button class="btn-tmpl btn-tmpl-del" onclick="deleteTemplate({{ t.id }})">Delete</button>
                     <span class="tmpl-result" id="tmpl-result-{{ t.id }}"></span>
                 </div>
@@ -440,12 +688,12 @@
             {% endfor %}
         {% else %}
             <div style="text-align:center;padding:48px;color:var(--text-3);">
-                <div style="font-size:28px;margin-bottom:8px;">🎯</div>
                 <div style="font-size:14px;font-weight:600;margin-bottom:6px;">No strategies yet</div>
-                <div style="font-size:12px;">Click <strong>+ New Strategy</strong> to configure your first auto-execution template.</div>
+                <div style="font-size:12px;">Configure above to save your first auto-execution template.</div>
             </div>
         {% endif %}
     </div>
+</div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════ -->
@@ -504,7 +752,7 @@
     </div>
 
     <div class="strat-panel">
-        <div class="panel-title">📋 Strategy Legs</div>
+        <div class="panel-title">Strategy Legs</div>
         <div class="panel-hint" id="panel-hint">Select strikes from the chain to build your strategy.</div>
         <div class="legs-list" id="legs-list"></div>
         <hr style="border:none;border-top:1px solid var(--border);margin:0;">
@@ -523,7 +771,7 @@
             <div class="entry-field">
                 <label>Add to Basket</label>
                 <select id="inp-basket" onchange="onBasketChange()">
-                    <option value="new">➕ Create New Basket</option>
+                    <option value="new">+ Create New Basket</option>
                     {% for b in baskets %}
                     <option value="{{ b.id }}">{{ b.name }}</option>
                     {% endfor %}
@@ -540,89 +788,7 @@
 </div>
 </div><!-- end tab-manual -->
 
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<!-- CREATE / EDIT MODAL                                               -->
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<div class="form-modal-backdrop" id="form-modal-backdrop">
-<div class="form-modal">
-    <h3 id="form-modal-title">New Strategy</h3>
-
-    <div class="fm-section">Strategy Setup</div>
-    <div class="fm-grid">
-        <div class="fm-field" style="grid-column:1/-1;">
-            <label>Name</label>
-            <input type="text" id="fm-name" placeholder="e.g. NIFTY Daily Straddle">
-        </div>
-        <div class="fm-field">
-            <label>Strategy Type</label>
-            <select id="fm-type">
-                {% for k, v in strategy_types.items() %}
-                <option value="{{ k }}">{{ v }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="fm-field">
-            <label>Underlying</label>
-            <select id="fm-underlying">
-                {% for u in underlyings %}
-                <option value="{{ u }}">{{ u }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="fm-field">
-            <label>Expiry</label>
-            <select id="fm-expiry-rule">
-                {% for k, v in expiry_rules.items() %}
-                <option value="{{ k }}">{{ v }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="fm-field">
-            <label>Lots</label>
-            <input type="number" id="fm-lots" value="1" min="1">
-        </div>
-    </div>
-
-    <div class="fm-section">Entry Triggers</div>
-    <div class="fm-grid">
-        <div class="fm-field">
-            <label>Entry Time (IST)</label>
-            <input type="time" id="fm-entry-time" value="09:20">
-        </div>
-        <div class="fm-field" style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div class="fm-field">
-                <label>VIX Min (optional)</label>
-                <input type="number" id="fm-vix-min" step="0.1" placeholder="e.g. 12">
-            </div>
-            <div class="fm-field">
-                <label>VIX Max (optional)</label>
-                <input type="number" id="fm-vix-max" step="0.1" placeholder="e.g. 20">
-            </div>
-        </div>
-    </div>
-
-    <div class="fm-section">Risk Management (% of premium collected)</div>
-    <div class="fm-grid">
-        <div class="fm-field">
-            <label>Profit Target %</label>
-            <input type="number" id="fm-pt-pct" value="50" step="5" min="0" max="200">
-        </div>
-        <div class="fm-field">
-            <label>Loss Guard %</label>
-            <input type="number" id="fm-lg-pct" value="100" step="5" min="0" max="300">
-        </div>
-        <div class="fm-field" style="grid-column:1/-1;display:flex;align-items:center;gap:10px;">
-            <input type="checkbox" id="fm-eod-exit" checked style="width:16px;height:16px;">
-            <label style="text-transform:none;letter-spacing:0;font-size:13px;">EOD Exit (auto-exit at 3:10 PM)</label>
-        </div>
-    </div>
-
-    <div class="fm-actions">
-        <button class="btn-ghost" onclick="closeFormModal()">Cancel</button>
-        <button class="btn-save" onclick="saveTemplate()">Save Strategy</button>
-    </div>
-</div>
-</div>
+<!-- modal removed — replaced by inline progressive disclosure in Pre-built tab -->
 
 <script>
 // ── Tab switching ─────────────────────────────────────────────────────
@@ -632,6 +798,7 @@ function switchTab(tab, btn) {
     document.getElementById('tab-' + tab).classList.add('active');
     btn.classList.add('active');
     if (tab === 'manual' && !_chain) loadChain();
+    if (tab === 'prebuilt') pbOnSelectorChange();
 }
 
 // ── VIX live update ───────────────────────────────────────────────────
@@ -798,86 +965,10 @@ function _drawSparkline(pts, col) {
 // Draw on load with pre-seeded history
 refreshVix();
 
-// ── Template CRUD ─────────────────────────────────────────────────────
-let _editingId = null;
+// Pre-built: enable Configure button immediately on load (all 3 selectors have defaults)
+pbOnSelectorChange();
 
-function openCreateForm() {
-    _editingId = null;
-    document.getElementById('form-modal-title').textContent = 'New Strategy';
-    ['fm-name','fm-vix-min','fm-vix-max'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('fm-type').value         = 'short_straddle';
-    document.getElementById('fm-underlying').value   = 'NIFTY';
-    document.getElementById('fm-expiry-rule').value  = 'nearest_weekly';
-    document.getElementById('fm-lots').value         = '1';
-    document.getElementById('fm-entry-time').value   = '09:20';
-    document.getElementById('fm-pt-pct').value       = '50';
-    document.getElementById('fm-lg-pct').value       = '100';
-    document.getElementById('fm-eod-exit').checked   = true;
-    document.getElementById('form-modal-backdrop').classList.add('open');
-}
-
-function openEditForm(t) {
-    _editingId = t.id;
-    document.getElementById('form-modal-title').textContent = 'Edit Strategy';
-    document.getElementById('fm-name').value          = t.name;
-    document.getElementById('fm-type').value          = t.strategy_type;
-    document.getElementById('fm-underlying').value    = t.underlying;
-    document.getElementById('fm-expiry-rule').value   = t.expiry_rule;
-    document.getElementById('fm-lots').value          = t.lots;
-    document.getElementById('fm-entry-time').value    = t.entry_time;
-    document.getElementById('fm-vix-min').value       = t.vix_min || '';
-    document.getElementById('fm-vix-max').value       = t.vix_max || '';
-    document.getElementById('fm-pt-pct').value        = t.pt_pct;
-    document.getElementById('fm-lg-pct').value        = t.lg_pct;
-    document.getElementById('fm-eod-exit').checked    = t.eod_exit;
-    document.getElementById('form-modal-backdrop').classList.add('open');
-}
-
-function closeFormModal() {
-    document.getElementById('form-modal-backdrop').classList.remove('open');
-}
-
-document.getElementById('form-modal-backdrop').addEventListener('click', function(e) {
-    if (e.target === this) closeFormModal();
-});
-
-function _collectForm() {
-    return {
-        name:           document.getElementById('fm-name').value.trim(),
-        strategy_type:  document.getElementById('fm-type').value,
-        underlying:     document.getElementById('fm-underlying').value,
-        expiry_rule:    document.getElementById('fm-expiry-rule').value,
-        lots:           parseInt(document.getElementById('fm-lots').value) || 1,
-        entry_time:     document.getElementById('fm-entry-time').value,
-        vix_min:        parseFloat(document.getElementById('fm-vix-min').value) || null,
-        vix_max:        parseFloat(document.getElementById('fm-vix-max').value) || null,
-        pt_pct:         parseFloat(document.getElementById('fm-pt-pct').value) || 50,
-        lg_pct:         parseFloat(document.getElementById('fm-lg-pct').value) || 100,
-        eod_exit:       document.getElementById('fm-eod-exit').checked,
-    };
-}
-
-async function saveTemplate() {
-    const data = _collectForm();
-    if (!data.name) { alert('Enter a strategy name.'); return; }
-
-    const url = _editingId
-        ? `/strategies/templates/${_editingId}/update`
-        : '/strategies/templates/create';
-
-    const r = await fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data),
-    });
-    const res = await r.json();
-    if (res.status === 'ok') {
-        closeFormModal();
-        location.reload();   // simple refresh to show new template
-    } else {
-        alert('Error: ' + (res.error || 'Unknown'));
-    }
-}
+// ── Template CRUD (saved-card actions) ───────────────────────────────
 
 async function toggleTemplate(tid, btn) {
     const r = await fetch(`/strategies/templates/${tid}/toggle`, {method:'POST'});
@@ -900,7 +991,7 @@ async function deleteTemplate(tid) {
 }
 
 async function executeNow(tid, btn) {
-    btn.disabled = true; btn.textContent = '⏳ Executing…';
+    btn.disabled = true; btn.textContent = 'Executing...';
     const resultEl = document.getElementById('tmpl-result-' + tid);
     resultEl.textContent = '';
 
@@ -909,20 +1000,20 @@ async function executeNow(tid, btn) {
         const d = await r.json();
         if (r.ok && d.status === 'ok') {
             resultEl.className = 'tmpl-result ok';
-            resultEl.textContent = `✓ Basket "${d.basket_name}" created → Execution tab`;
+            resultEl.textContent = `Basket "${d.basket_name}" created — Execution tab`;
             const card = document.getElementById('tmpl-' + tid);
             card.className = 'tmpl-card status-active';
             card.querySelector('.status-pill').className = 'status-pill pill-active';
             card.querySelector('.status-pill').textContent = 'ACTIVE';
         } else {
             resultEl.className = 'tmpl-result err';
-            resultEl.textContent = '✗ ' + (d.error || 'Failed');
+            resultEl.textContent = 'Failed: ' + (d.error || 'Unknown error');
         }
     } catch(e) {
         resultEl.className = 'tmpl-result err';
-        resultEl.textContent = '✗ Network error';
+        resultEl.textContent = 'Network error';
     }
-    btn.textContent = '▶ Execute Now';
+    btn.textContent = 'Execute Now';
     btn.disabled = false;
 }
 
@@ -1060,7 +1151,7 @@ function renderLegs() {
             <span class="${l.side==='BUY'?'leg-side-buy':'leg-side-sell'}">${l.side}</span>
             <div style="display:flex;align-items:center;gap:8px">
                 <span class="leg-ltp">₹${l.ltp.toFixed(2)}</span>
-                <button class="leg-remove" onclick="removeLeg(${i})">✕</button>
+                <button class="leg-remove" onclick="removeLeg(${i})">&times;</button>
             </div>
         </div>`).join('') +
         `<div style="font-size:12px;color:var(--text-2);text-align:right;margin-top:4px;">
@@ -1100,7 +1191,7 @@ async function executeStrategy() {
         const r = await fetch('/execution/place', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
         const data = await r.json();
         if (r.ok && (!data.errors||data.errors.length===0)) {
-            showToast('ok', `✓ ${data.placed.length} order(s) sent → basket "${data.basket_name}". Redirecting…`);
+            showToast('ok', `${data.placed.length} order(s) sent — basket "${data.basket_name}". Redirecting...`);
             _legs=[]; renderLegs(); renderChainSelection();
             setTimeout(()=>{ window.location.href='/execution'; }, 1800);
         } else {
@@ -1119,6 +1210,281 @@ function showToast(type, msg) {
 function onBasketChange() {
     const v = document.getElementById('inp-basket').value;
     document.getElementById('inp-new-basket-name').className = 'new-basket-name'+(v==='new'?' show':'');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PRE-BUILT TAB
+// ══════════════════════════════════════════════════════════════════════
+
+// Strike fields shown per strategy
+const PB_STRIKE_FIELDS = {
+    short_straddle:  { atm_n: true,  sell_off: false, wing_off: false, spread: false, hedge: true  },
+    short_strangle:  { atm_n: false, sell_off: true,  wing_off: false, spread: false, hedge: true  },
+    iron_condor:     { atm_n: false, sell_off: true,  wing_off: true,  spread: false, hedge: false },
+    iron_butterfly:  { atm_n: false, sell_off: false, wing_off: true,  spread: false, hedge: false },
+    bull_spread:     { atm_n: false, sell_off: false, wing_off: false, spread: true,  hedge: false },
+    bear_spread:     { atm_n: false, sell_off: false, wing_off: false, spread: true,  hedge: false },
+};
+
+function pbOnSelectorChange() {
+    const scrip  = document.getElementById('pb-scrip')?.value;
+    const expiry = document.getElementById('pb-expiry')?.value;
+    const strat  = document.getElementById('pb-strategy')?.value;
+    const btn    = document.getElementById('pb-configure-btn');
+    if (btn) btn.disabled = !(scrip && expiry && strat);
+}
+
+function pbShowConfig() {
+    const strat = document.getElementById('pb-strategy').value;
+    const panel = document.getElementById('pb-config-panel');
+    panel.hidden = false;
+    _pbAdaptFields(strat);
+    pbRunPrecheck();
+    // Auto-name
+    const scrip = document.getElementById('pb-scrip').value;
+    const stypes = {{ strategy_types | tojson }};
+    const nm = document.getElementById('pbc-name');
+    if (!nm.value) nm.value = `${scrip} ${stypes[strat] || strat}`;
+}
+
+function _pbAdaptFields(strat) {
+    const cfg = PB_STRIKE_FIELDS[strat] || {};
+    _pbShow('pbc-atm-n',    cfg.atm_n);
+    _pbShow('pbc-sell-off', cfg.sell_off);
+    _pbShow('pbc-wing-off', cfg.wing_off);
+    _pbShow('pbc-spread-w', cfg.spread);
+    _pbShow('pbc-hedge-section', cfg.hedge);
+    if (!cfg.hedge) {
+        const hc = document.getElementById('pbc-hedge');
+        if (hc) hc.checked = false;
+        _pbShow('pbc-hedge-off-field', false);
+    }
+}
+
+function _pbShow(id, visible) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !visible;
+}
+
+function pbOnHedgeChange() {
+    const checked = document.getElementById('pbc-hedge').checked;
+    _pbShow('pbc-hedge-off-field', checked);
+    pbSchedulePrecheck();
+}
+
+function pbOnShiftChange() {
+    const checked = document.getElementById('pbc-shift-toggle').checked;
+    _pbShow('pbc-shift-field', checked);
+    pbSchedulePrecheck();
+}
+
+function pbOnLotsChange() {
+    // Keep max-lots in sync if it hasn't been manually changed
+    const lots    = parseInt(document.getElementById('pbc-lots').value) || 1;
+    const maxLots = document.getElementById('pbc-max-lots');
+    if (parseInt(maxLots.value) > lots || maxLots.dataset.synced !== 'manual') {
+        maxLots.value = lots;
+    }
+    pbSchedulePrecheck();
+}
+
+// Debounced precheck
+let _pbPrecheckTimer = null;
+function pbSchedulePrecheck() {
+    clearTimeout(_pbPrecheckTimer);
+    _pbPrecheckTimer = setTimeout(pbRunPrecheck, 400);
+}
+
+function _pbCollectConfig() {
+    const g = id => document.getElementById(id);
+    return {
+        scrip:               g('pb-scrip').value,
+        expiry:              g('pb-expiry').value,
+        strategy:            g('pb-strategy').value,
+        lots:                parseInt(g('pbc-lots').value) || 1,
+        max_lots_per_order:  parseInt(g('pbc-max-lots').value) || null,
+        atm_strikes_to_sell: parseInt(g('pbc-atm-strikes')?.value) || 0,
+        sell_offset:         parseInt(g('pbc-sell-offset')?.value) || 2,
+        wing_offset:         parseInt(g('pbc-wing-offset')?.value) || 4,
+        spread_width:        parseInt(g('pbc-spread-width')?.value) || 1,
+        hedge:               g('pbc-hedge')?.checked || false,
+        hedge_offset:        parseInt(g('pbc-hedge-offset')?.value) || 2,
+        strike_shift:        g('pbc-shift-toggle')?.checked ? (parseInt(g('pbc-strike-shift')?.value) || 0) : 0,
+        entry_time:          g('pbc-entry-time').value || '09:20',
+        vix_min:             parseFloat(g('pbc-vix-min').value) || null,
+        vix_max:             parseFloat(g('pbc-vix-max').value) || null,
+        pt_pct:              parseFloat(g('pbc-pt-pct').value) || 50,
+        lg_pct:              parseFloat(g('pbc-lg-pct').value) || 100,
+        eod_exit:            g('pbc-eod-exit').checked,
+        name:                g('pbc-name').value.trim(),
+    };
+}
+
+async function pbRunPrecheck() {
+    const panel   = document.getElementById('pb-precheck-panel');
+    const content = document.getElementById('pb-precheck-content');
+    if (!panel) return;
+    panel.hidden = false;
+    content.innerHTML = '<div class="pb-precheck-loading">Fetching stats...</div>';
+
+    try {
+        const r = await fetch('/api/precheck', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify(_pbCollectConfig()),
+        });
+        const d = await r.json();
+        if (!r.ok) { content.innerHTML = `<div class="pb-precheck-loading" style="color:var(--loss)">${d.error || 'Error'}</div>`; return; }
+        content.innerHTML = _pbRenderPrecheck(d);
+    } catch(e) {
+        content.innerHTML = '<div class="pb-precheck-loading" style="color:var(--loss)">Could not fetch stats.</div>';
+    }
+}
+
+function _pbRenderPrecheck(d) {
+    const fmt = v => v != null ? '&#8377;' + v.toLocaleString('en-IN', {maximumFractionDigits:2}) : '—';
+    const fmtN = (v, dec=2) => v != null ? v.toFixed(dec) : '—';
+
+    // Order book table
+    const rows = (d.legs || []).map(l => `
+        <tr>
+            <td>${l.tradingsymbol}</td>
+            <td class="${l.side==='SELL'?'t-sell':'t-buy'}">${l.side}</td>
+            <td>${l.qty}</td>
+            <td>&#8377;${l.price.toFixed(2)}</td>
+            <td>&#8377;${(l.price * l.qty).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+        </tr>`).join('');
+    const orderTable = `
+        <div style="grid-column:1/-1;">
+            <div class="pb-stat-label" style="margin-bottom:6px;">Order Book</div>
+            <table class="pb-order-table">
+                <thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Value</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+
+    // Charges
+    const ch = d.charges || {};
+    const chargesBlock = `
+        <div class="pb-stat-block">
+            <div class="pb-stat-label">Charges</div>
+            <div class="pb-stat-val">${fmt(ch.total)}</div>
+            <div class="pb-stat-sub">Brokerage ${fmt(ch.brokerage)} &bull; STT ${fmt(ch.stt)} &bull; Exch ${fmt(ch.exchange)} &bull; GST ${fmt(ch.gst)}</div>
+        </div>`;
+
+    // Margin
+    const marginBlock = `
+        <div class="pb-stat-block">
+            <div class="pb-stat-label">Margin Required</div>
+            <div class="pb-stat-val">${d.margin_required != null ? fmt(d.margin_required) : 'Login required'}</div>
+        </div>
+        <div class="pb-stat-block">
+            <div class="pb-stat-label">Margin Available</div>
+            <div class="pb-stat-val">${d.margin_available != null ? fmt(d.margin_available) : '—'}</div>
+        </div>`;
+
+    // Greeks aggregate
+    const ag = d.greeks?.aggregate || {};
+    const greeksBlock = `
+        <div class="pb-stat-block">
+            <div class="pb-stat-label">Greeks (position)</div>
+            <div class="pb-stat-val" style="font-size:12px;">
+                &Delta; ${fmtN(ag.delta)} &nbsp; &Gamma; ${fmtN(ag.gamma,5)} &nbsp; &Theta; ${fmtN(ag.theta)} &nbsp; &nu; ${fmtN(ag.vega)}
+            </div>
+        </div>`;
+
+    // DTE
+    const dteBlock = `
+        <div class="pb-stat-block">
+            <div class="pb-stat-label">Days to Expiry</div>
+            <div class="pb-stat-val">${d.dte != null ? d.dte + ' days' : '—'}</div>
+            <div class="pb-stat-sub">Spot ${d.spot != null ? d.spot.toLocaleString('en-IN',{maximumFractionDigits:2}) : '—'} &bull; Lot ${d.lot_size || '—'}</div>
+        </div>`;
+
+    return `<div class="pb-precheck-grid">${orderTable}${chargesBlock}${marginBlock}${greeksBlock}${dteBlock}</div>`;
+}
+
+function pbReset() {
+    document.getElementById('pb-config-panel').hidden = true;
+    document.getElementById('pb-precheck-panel').hidden = true;
+    document.getElementById('pb-configure-btn').disabled = false;
+    document.getElementById('pb-action-result').textContent = '';
+}
+
+function _pbCollectTemplate() {
+    const cfg = _pbCollectConfig();
+    if (!cfg.name) cfg.name = `${cfg.scrip} ${cfg.strategy}`;
+    // Map to template schema
+    return {
+        name:                cfg.name,
+        strategy_type:       cfg.strategy,
+        underlying:          cfg.scrip,
+        expiry_rule:         'nearest_weekly',   // expiry field maps to closest rule
+        lots:                cfg.lots,
+        max_lots_per_order:  cfg.max_lots_per_order,
+        atm_strikes_to_sell: cfg.atm_strikes_to_sell,
+        sell_offset:         cfg.sell_offset,
+        wing_offset:         cfg.wing_offset,
+        hedge:               cfg.hedge,
+        hedge_offset:        cfg.hedge_offset,
+        strike_shift:        cfg.strike_shift,
+        entry_time:          cfg.entry_time,
+        vix_min:             cfg.vix_min,
+        vix_max:             cfg.vix_max,
+        pt_pct:              cfg.pt_pct,
+        lg_pct:              cfg.lg_pct,
+        eod_exit:            cfg.eod_exit,
+    };
+}
+
+async function pbSave() {
+    const data = _pbCollectTemplate();
+    const resultEl = document.getElementById('pb-action-result');
+    resultEl.textContent = 'Saving...';
+    const r = await fetch('/strategies/templates/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    });
+    const res = await r.json();
+    if (res.status === 'ok') {
+        resultEl.className = 'pb-action-result ok';
+        resultEl.textContent = 'Saved. Reloading...';
+        setTimeout(() => location.reload(), 900);
+    } else {
+        resultEl.className = 'pb-action-result err';
+        resultEl.textContent = 'Error: ' + (res.error || 'Unknown');
+    }
+}
+
+async function pbExecuteNow() {
+    const resultEl = document.getElementById('pb-action-result');
+    resultEl.textContent = 'Saving...';
+    // Save first
+    const data = _pbCollectTemplate();
+    const r1 = await fetch('/strategies/templates/create', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data),
+    });
+    const res1 = await r1.json();
+    if (res1.status !== 'ok') {
+        resultEl.className = 'pb-action-result err';
+        resultEl.textContent = 'Save failed: ' + (res1.error || 'Unknown');
+        return;
+    }
+    // Execute
+    resultEl.textContent = 'Executing...';
+    const tid = res1.template?.id;
+    if (!tid) { resultEl.textContent = 'No template ID returned.'; return; }
+    const r2 = await fetch(`/strategies/templates/${tid}/execute-now`, {method:'POST'});
+    const res2 = await r2.json();
+    if (r2.ok && res2.status === 'ok') {
+        resultEl.className = 'pb-action-result ok';
+        resultEl.textContent = `Basket "${res2.basket_name}" created — go to Execution tab`;
+        setTimeout(() => location.reload(), 1500);
+    } else {
+        resultEl.className = 'pb-action-result err';
+        resultEl.textContent = 'Execute failed: ' + (res2.error || 'Unknown');
+    }
 }
 </script>
 {% endblock %}

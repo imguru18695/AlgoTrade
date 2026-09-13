@@ -8,11 +8,12 @@ from typing import Optional
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 STRATEGY_TYPES = {
-    "short_straddle": "Short Straddle",
-    "short_strangle": "Short Strangle",
-    "iron_condor":    "Iron Condor",
-    "bull_spread":    "Bull Call Spread",
-    "bear_spread":    "Bear Put Spread",
+    "short_straddle":  "Short Straddle",
+    "short_strangle":  "Short Strangle",
+    "iron_condor":     "Iron Condor",
+    "iron_butterfly":  "Iron Butterfly",
+    "bull_spread":     "Bull Call Spread",
+    "bear_spread":     "Bear Put Spread",
 }
 
 EXPIRY_RULES = {
@@ -49,15 +50,22 @@ def create_template(data: dict) -> dict:
         "strategy_type":       data.get("strategy_type", "short_straddle"),
         "underlying":          data.get("underlying", "NIFTY"),
         "expiry_rule":         data.get("expiry_rule", "nearest_weekly"),
-        "lots":                _coerce(data, "lots",           int,   1),
+        "lots":                _coerce(data, "lots",               int,   1),
+        "max_lots_per_order":  _coerce(data, "max_lots_per_order", int,   None),   # None = same as lots
+        "atm_strikes_to_sell": _coerce(data, "atm_strikes_to_sell",int,   0),
+        "sell_offset":         _coerce(data, "sell_offset",        int,   2),
+        "wing_offset":         _coerce(data, "wing_offset",        int,   4),
+        "hedge":               bool(data.get("hedge", False)),
+        "hedge_offset":        _coerce(data, "hedge_offset",       int,   2),
+        "strike_shift":        _coerce(data, "strike_shift",       int,   0),
         "entry_time":          data.get("entry_time", "09:20"),   # HH:MM IST
-        "vix_min":             _coerce(data, "vix_min",        float, None),
-        "vix_max":             _coerce(data, "vix_max",        float, None),
-        "pt_pct":              _coerce(data, "pt_pct",         float, 50.0),
-        "lg_pct":              _coerce(data, "lg_pct",         float, 100.0),
+        "vix_min":             _coerce(data, "vix_min",            float, None),
+        "vix_max":             _coerce(data, "vix_max",            float, None),
+        "pt_pct":              _coerce(data, "pt_pct",             float, 50.0),
+        "lg_pct":              _coerce(data, "lg_pct",             float, 100.0),
         "ps_active":           bool(data.get("ps_active", False)),
-        "ps_trigger_pct":      _coerce(data, "ps_trigger_pct", float, None),
-        "ps_lock_pct":         _coerce(data, "ps_lock_pct",    float, None),
+        "ps_trigger_pct":      _coerce(data, "ps_trigger_pct",     float, None),
+        "ps_lock_pct":         _coerce(data, "ps_lock_pct",        float, None),
         "eod_exit":            bool(data.get("eod_exit", True)),
         "enabled":             True,
         "status":              "scheduled",
@@ -83,7 +91,9 @@ def update_template(tid: int, data: dict) -> Optional[dict]:
     if not t:
         return None
     updatable = (
-        "name", "lots", "entry_time", "vix_min", "vix_max",
+        "name", "lots", "max_lots_per_order", "atm_strikes_to_sell",
+        "sell_offset", "wing_offset", "hedge", "hedge_offset", "strike_shift",
+        "entry_time", "vix_min", "vix_max",
         "pt_pct", "lg_pct", "ps_active", "ps_trigger_pct", "ps_lock_pct",
         "eod_exit", "enabled", "strategy_type", "underlying", "expiry_rule",
     )

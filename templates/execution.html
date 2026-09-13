@@ -47,8 +47,8 @@
 .status-rejected     { background: rgba(255,77,106,0.12); color: var(--loss);    border: 1px solid rgba(255,77,106,0.3); }
 .status-cancelled    { background: rgba(255,255,255,0.06); color: var(--text-3); border: 1px solid var(--border); }
 .status-open::before     { content:'●'; font-size:7px; animation: pulse 1.2s ease-in-out infinite; }
-.status-complete::before { content:'✓'; }
-.status-rejected::before { content:'✗'; }
+.status-complete::before { content:'OK'; font-size:9px; }
+.status-rejected::before { content:'X'; font-size:9px; }
 .status-cancelled::before { content:'○'; }
 @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.35} }
 
@@ -289,7 +289,7 @@
             <div class="ep-field">
                 <label>Basket</label>
                 <select id="ep-basket" onchange="onEpBasketChange()">
-                    <option value="new">➕ Create New Basket</option>
+                    <option value="new">+ Create New Basket</option>
                     {% for b in baskets %}
                     <option value="{{ b.id }}">{{ b.name }}</option>
                     {% endfor %}
@@ -482,7 +482,7 @@ async function placeManual() {
         if (data.errors && data.errors.length > 0) {
             showEpToast('err', data.errors[0].error || 'Placement failed');
         } else {
-            showEpToast('ok', `✓ Order placed → basket "${data.basket_name}"`);
+            showEpToast('ok', `Order placed — basket "${data.basket_name}"`);
             document.getElementById('ep-sym').value = '';
             fetchOrders();
         }
