@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 {# Management page — full basket/position/RM control panel #}
 
@@ -38,7 +38,7 @@
         <thead>
             <tr>
                 <th class="col-check">
-                    <input type="checkbox" id="unalloc-check-all"
+                    <input type="checkbox" id="unalloc-check-all" aria-label="Select all positions"
                            onchange="toggleAllUnalloc(this)">
                 </th>
                 <th>Symbol</th>
@@ -53,7 +53,7 @@
         {% for p in unallocated %}
         <tr data-pos-key="{{ p.tradingsymbol }}|{{ p.exchange }}|{{ p.product }}">
             <td class="col-check">
-                <input type="checkbox" class="unalloc-check"
+                <input type="checkbox" class="unalloc-check" aria-label="Select {{ p.tradingsymbol }}"
                        data-symbol="{{ p.tradingsymbol }}"
                        data-exchange="{{ p.exchange }}"
                        data-product="{{ p.product }}"
@@ -82,7 +82,7 @@
 {% for b in baskets %}
 {% set state_class = 'state-fired' if b.fired else ('state-rm-active' if b.rm_enabled else ('state-empty' if not b.positions else 'state-no-rm')) %}
 <section class="section basket-card {{ state_class }}" id="basket-{{ b.id }}">
-    <div class="basket-header" onclick="toggleBasket({{ b.id }})">
+    <div class="basket-header" role="button" tabindex="0" onclick="toggleBasket({{ b.id }})" onkeydown="if(event.key==='Enter'||event.key===' ')toggleBasket({{ b.id }})">
 
         <!-- Left: name + RM status dots + stat chips -->
         <div class="basket-info">
@@ -175,7 +175,7 @@
                     {% for p in b.positions %}
                     <tr data-pos-key="{{ p.tradingsymbol }}|{{ p.exchange }}|{{ p.product }}">
                         <td class="col-check">
-                            <input type="checkbox" class="basket-check-{{ b.id }}"
+                            <input type="checkbox" class="basket-check-{{ b.id }}" aria-label="Select {{ p.tradingsymbol }}"
                                    data-symbol="{{ p.tradingsymbol }}"
                                    data-exchange="{{ p.exchange }}"
                                    data-product="{{ p.product }}"
@@ -231,14 +231,14 @@
                             </div>
                             <div class="rm-fields" id="pt-fields-{{ b.id }}">
                                 <div class="rm-field">
-                                    <label>Target P&amp;L (₹)</label>
+                                    <label for="pt-inr-{{ b.id }}">Target P&amp;L (₹)</label>
                                     <input type="number" name="inr" min="1" step="1"
                                            id="pt-inr-{{ b.id }}"
                                            value="{{ pt.get('pt_inr') or '' }}"
                                            placeholder="e.g. 15000">
                                 </div>
                                 <div class="rm-field">
-                                    <label>Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
+                                    <label for="pt-ticks-{{ b.id }}">Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
                                     <input type="number" name="ticks" min="1" step="1"
                                            id="pt-ticks-{{ b.id }}"
                                            value="{{ pt.get('pt_ticks') or '' }}"
@@ -280,14 +280,14 @@
                             </div>
                             <div class="rm-fields" id="lg-fields-{{ b.id }}">
                                 <div class="rm-field">
-                                    <label>Max Loss (₹)</label>
+                                    <label for="lg-inr-{{ b.id }}">Max Loss (₹)</label>
                                     <input type="number" name="inr" min="1" step="1"
                                            id="lg-inr-{{ b.id }}"
                                            value="{{ pt.get('lg_inr') or '' }}"
                                            placeholder="e.g. 10000">
                                 </div>
                                 <div class="rm-field">
-                                    <label>Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
+                                    <label for="pt-ticks-{{ b.id }}">Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
                                     <input type="number" name="ticks" min="1" step="1"
                                            id="lg-ticks-{{ b.id }}"
                                            value="{{ pt.get('lg_ticks') or '' }}"
@@ -330,14 +330,14 @@
                             </div>
                             <div class="rm-fields" id="ps-fields-{{ b.id }}">
                                 <div class="rm-field">
-                                    <label>If profit reaches (₹)</label>
+                                    <label for="ps-trigger-{{ b.id }}">If profit reaches (₹)</label>
                                     <input type="number" name="trigger" min="1" step="1"
                                            id="ps-trigger-{{ b.id }}"
                                            value="{{ pt.get('ps_trigger') or '' }}"
                                            placeholder="e.g. 10000">
                                 </div>
                                 <div class="rm-field">
-                                    <label>Lock min profit at (₹)</label>
+                                    <label for="ps-lock-{{ b.id }}">Lock min profit at (₹)</label>
                                     <input type="number" name="lock" min="1" step="1"
                                            id="ps-lock-{{ b.id }}"
                                            value="{{ pt.get('ps_lock') or '' }}"
@@ -345,14 +345,14 @@
                                 </div>
                                 <div class="rm-field-divider"></div>
                                 <div class="rm-field">
-                                    <label>Increase in profit (₹)</label>
+                                    <label for="ps-step_profit-{{ b.id }}">Increase in profit (₹)</label>
                                     <input type="number" name="step_profit" min="1" step="1"
                                            id="ps-step_profit-{{ b.id }}"
                                            value="{{ pt.get('ps_step_profit') or '' }}"
                                            placeholder="Step size e.g. 2000">
                                 </div>
                                 <div class="rm-field">
-                                    <label>Increase min profit by (₹)</label>
+                                    <label for="ps-step_lock-{{ b.id }}">Increase min profit by (₹)</label>
                                     <input type="number" name="step_lock" min="1" step="1"
                                            id="ps-step_lock-{{ b.id }}"
                                            value="{{ pt.get('ps_step_lock') or '' }}"
@@ -444,7 +444,7 @@
 </div>
 
 <!-- Allocate Modal -->
-<div id="alloc-modal" class="modal-backdrop" style="display:none" onclick="closeAllocModal(event)">
+<div id="alloc-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Allocate Position" style="display:none" onclick="closeAllocModal(event)">
     <div class="modal">
         <h3>Allocate Position</h3>
         <p id="alloc-symbol" class="modal-symbol"></p>
@@ -459,7 +459,7 @@
             <input type="hidden" name="exchange" id="m-exchange">
             <input type="hidden" name="product" id="m-product">
             <input type="hidden" name="instrument_token" id="m-token">
-            <select name="basket_id" class="modal-select">
+            <select name="basket_id" class="modal-select" aria-label="Select existing basket">
                 {% for b in baskets %}
                 <option value="{{ b.id }}">{{ b.name }}</option>
                 {% endfor %}
@@ -472,7 +472,7 @@
             <input type="hidden" name="exchange" id="mn-exchange">
             <input type="hidden" name="product" id="mn-product">
             <input type="hidden" name="instrument_token" id="mn-token">
-            <input type="text" name="basket_name" class="modal-select" placeholder="Basket name (optional)">
+            <input type="text" name="basket_name" class="modal-select" aria-label="New basket name" placeholder="Basket name (optional)">
             <button type="submit" class="btn-primary" style="margin-top:16px;width:100%">Create & Allocate</button>
         </form>
 
@@ -481,7 +481,7 @@
 </div>
 
 <!-- Bulk Allocate Modal -->
-<div id="bulk-alloc-modal" class="modal-backdrop" style="display:none" onclick="closeBulkModal(event)">
+<div id="bulk-alloc-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Bulk Allocate" style="display:none" onclick="closeBulkModal(event)">
     <div class="modal">
         <h3>Allocate Selected</h3>
         <p id="bulk-alloc-count" class="modal-symbol"></p>
@@ -492,7 +492,7 @@
         </div>
 
         <div id="bulk-form-existing">
-            <select id="bulk-basket-id" class="modal-select">
+            <select id="bulk-basket-id" class="modal-select" aria-label="Select existing basket">
                 {% for b in baskets %}
                 <option value="{{ b.id }}">{{ b.name }}</option>
                 {% endfor %}
@@ -502,7 +502,7 @@
         </div>
 
         <div id="bulk-form-new" style="display:none">
-            <input type="text" id="bulk-basket-name" class="modal-select" placeholder="Basket name (optional)">
+            <input type="text" id="bulk-basket-name" class="modal-select" aria-label="New basket name" placeholder="Basket name (optional)">
             <button class="btn-primary" style="margin-top:16px;width:100%"
                     onclick="submitBulkAlloc('new')">Create & Allocate</button>
         </div>

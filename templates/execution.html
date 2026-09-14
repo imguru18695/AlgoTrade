@@ -239,12 +239,12 @@
         </div>
         <div class="entry-panel">
             <div class="ep-field">
-                <label>Symbol</label>
+                <label for="ep-sym">Symbol</label>
                 <input type="text" id="ep-sym" placeholder="e.g. NIFTY2561224500CE" autocomplete="off">
             </div>
             <div class="ep-row">
                 <div class="ep-field">
-                    <label>Exchange</label>
+                    <label for="ep-exch">Exchange</label>
                     <select id="ep-exch">
                         <option value="NFO">NFO</option>
                         <option value="NSE">NSE</option>
@@ -252,7 +252,7 @@
                     </select>
                 </div>
                 <div class="ep-field">
-                    <label>Product</label>
+                    <label for="ep-product">Product</label>
                     <select id="ep-product">
                         <option value="NRML">NRML</option>
                         <option value="MIS">MIS</option>
@@ -262,32 +262,32 @@
             </div>
             <div class="ep-row">
                 <div class="ep-field">
-                    <label>Side</label>
+                    <label for="ep-side">Side</label>
                     <select id="ep-side">
                         <option value="BUY">BUY</option>
                         <option value="SELL">SELL</option>
                     </select>
                 </div>
                 <div class="ep-field">
-                    <label>Qty (lots × lot size)</label>
+                    <label for="ep-qty">Qty (lots × lot size)</label>
                     <input type="number" id="ep-qty" value="25" min="1">
                 </div>
             </div>
             <div class="ep-row">
                 <div class="ep-field">
-                    <label>Order Type</label>
+                    <label for="ep-otype">Order Type</label>
                     <select id="ep-otype" onchange="onOrderTypeChange()">
                         <option value="LIMIT">LIMIT</option>
                         <option value="MARKET">MARKET</option>
                     </select>
                 </div>
                 <div class="ep-field" id="ep-price-wrap">
-                    <label>Price</label>
+                    <label for="ep-price">Price</label>
                     <input type="number" id="ep-price" step="0.05" placeholder="0.00">
                 </div>
             </div>
             <div class="ep-field">
-                <label>Basket</label>
+                <label for="ep-basket">Basket</label>
                 <select id="ep-basket" onchange="onEpBasketChange()">
                     <option value="new">+ Create New Basket</option>
                     {% for b in baskets %}
@@ -312,7 +312,7 @@
     <div class="modal-box">
         <div class="modal-title">Modify Order</div>
         <div class="ep-field">
-            <label>New Price</label>
+            <label for="modify-price">New Price</label>
             <input type="number" id="modify-price" step="0.05">
         </div>
         <div class="modal-actions">

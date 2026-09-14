@@ -472,7 +472,7 @@
 <!-- Stage 1: Selector row -->
 <div class="pb-selector" id="pb-selector">
     <div class="pb-sel-group">
-        <label class="pb-sel-label">Scrip</label>
+        <label class="pb-sel-label" for="pb-scrip">Scrip</label>
         <select id="pb-scrip" onchange="pbOnSelectorChange()">
             {% for u in underlyings %}
             <option value="{{ u }}">{{ u }}</option>
@@ -480,7 +480,7 @@
         </select>
     </div>
     <div class="pb-sel-group">
-        <label class="pb-sel-label">Expiry</label>
+        <label class="pb-sel-label" for="pb-expiry">Expiry</label>
         <select id="pb-expiry" onchange="pbOnSelectorChange()">
             {% for e in expiries %}
             <option value="{{ e }}">{{ e }}</option>
@@ -488,7 +488,7 @@
         </select>
     </div>
     <div class="pb-sel-group">
-        <label class="pb-sel-label">Strategy</label>
+        <label class="pb-sel-label" for="pb-strategy">Strategy</label>
         <select id="pb-strategy" onchange="pbOnSelectorChange()">
             {% for k, v in strategy_types.items() %}
             <option value="{{ k }}">{{ v }}</option>
@@ -508,22 +508,22 @@
     <div class="pb-config-grid" id="pb-strike-section">
         <!-- Short Straddle -->
         <div class="pb-field" id="pbc-atm-n" hidden>
-            <label>ATM Strikes to Sell <span class="pb-tip" title="Range strikes each side of ATM. 0 = ATM only, 1 = ATM ±1, etc.">?</span></label>
+            <label for="pbc-atm-strikes">ATM Strikes to Sell <span class="pb-tip" title="Range strikes each side of ATM. 0 = ATM only, 1 = ATM ±1, etc.">?</span></label>
             <input type="number" id="pbc-atm-strikes" value="0" min="0" max="5" oninput="pbSchedulePrecheck()">
         </div>
         <!-- Strangle / Condor sell offset -->
         <div class="pb-field" id="pbc-sell-off" hidden>
-            <label>Sell Offset (strikes OTM)</label>
+            <label for="pbc-sell-offset">Sell Offset (strikes OTM)</label>
             <input type="number" id="pbc-sell-offset" value="2" min="1" max="10" oninput="pbSchedulePrecheck()">
         </div>
         <!-- Wing offset -->
         <div class="pb-field" id="pbc-wing-off" hidden>
-            <label>Wing Offset (strikes OTM)</label>
+            <label for="pbc-wing-offset">Wing Offset (strikes OTM)</label>
             <input type="number" id="pbc-wing-offset" value="4" min="1" max="15" oninput="pbSchedulePrecheck()">
         </div>
         <!-- Spread width (bull/bear spreads) -->
         <div class="pb-field" id="pbc-spread-w" hidden>
-            <label>Spread Width (strikes)</label>
+            <label for="pbc-spread-width">Spread Width (strikes)</label>
             <input type="number" id="pbc-spread-width" value="1" min="1" max="10" oninput="pbSchedulePrecheck()">
         </div>
     </div>
@@ -539,7 +539,7 @@
                 </label>
             </div>
             <div class="pb-field" id="pbc-hedge-off-field" hidden>
-                <label>Hedge Offset (extra strikes)</label>
+                <label for="pbc-hedge-offset">Hedge Offset (extra strikes)</label>
                 <input type="number" id="pbc-hedge-offset" value="2" min="1" max="10" oninput="pbSchedulePrecheck()">
             </div>
         </div>
@@ -555,7 +555,7 @@
             </label>
         </div>
         <div class="pb-field" id="pbc-shift-field" hidden>
-            <label>Shift by (strikes, signed)</label>
+            <label for="pbc-strike-shift">Shift by (strikes, signed)</label>
             <input type="number" id="pbc-strike-shift" value="0" oninput="pbSchedulePrecheck()">
         </div>
     </div>
@@ -564,11 +564,11 @@
     <div class="pb-section-title">Lots &amp; Order</div>
     <div class="pb-config-grid">
         <div class="pb-field">
-            <label>Lots <span class="pb-tip" title="Number of lots per leg">?</span></label>
+            <label for="pbc-lots"><span class="pb-tip" title="Number of lots per leg">?</span></label>
             <input type="number" id="pbc-lots" value="1" min="1" max="50" oninput="pbOnLotsChange()">
         </div>
         <div class="pb-field">
-            <label>Max Lots per Order <span class="pb-tip" title="Split large orders — defaults to Lots">?</span></label>
+            <label for="pbc-max-lots"><span class="pb-tip" title="Split large orders — defaults to Lots">?</span></label>
             <input type="number" id="pbc-max-lots" value="1" min="1" max="50" oninput="pbSchedulePrecheck()">
         </div>
     </div>
@@ -577,15 +577,15 @@
     <div class="pb-section-title">Entry Triggers</div>
     <div class="pb-config-grid">
         <div class="pb-field">
-            <label>Entry Time (IST)</label>
+            <label for="pbc-entry-time">Entry Time (IST)</label>
             <input type="time" id="pbc-entry-time" value="09:20">
         </div>
         <div class="pb-field">
-            <label>VIX Min</label>
+            <label for="pbc-vix-min">VIX Min</label>
             <input type="number" id="pbc-vix-min" step="0.5" placeholder="e.g. 12">
         </div>
         <div class="pb-field">
-            <label>VIX Max</label>
+            <label for="pbc-vix-max">VIX Max</label>
             <input type="number" id="pbc-vix-max" step="0.5" placeholder="e.g. 20">
         </div>
     </div>
@@ -594,11 +594,11 @@
     <div class="pb-section-title">Risk Management</div>
     <div class="pb-config-grid">
         <div class="pb-field">
-            <label>Profit Target % of premium</label>
+            <label for="pbc-pt-pct">Profit Target % of premium</label>
             <input type="number" id="pbc-pt-pct" value="50" step="5" min="0">
         </div>
         <div class="pb-field">
-            <label>Loss Guard % of premium</label>
+            <label for="pbc-lg-pct">Loss Guard % of premium</label>
             <input type="number" id="pbc-lg-pct" value="100" step="5" min="0">
         </div>
         <div class="pb-field pb-checkbox-field" style="grid-column:1/-1">
@@ -613,7 +613,7 @@
     <div class="pb-section-title">Name</div>
     <div class="pb-config-grid">
         <div class="pb-field" style="grid-column:1/-1">
-            <label>Strategy Name</label>
+            <label for="pbc-name">Strategy Name</label>
             <input type="text" id="pbc-name" placeholder="e.g. NIFTY Daily Straddle">
         </div>
     </div>
