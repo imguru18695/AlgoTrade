@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <style>
 /* ── Strategies page ──────────────────────────────────────────────── */
@@ -1098,8 +1098,8 @@ function onCellClick(strike, optType, ltp, cell) {
     const exp = document.getElementById('cfg-expiry').value;
     if (_mode === 'straddle') {
         _legs = [
-            {strike, opt_type:'CE', side:'SELL', ltp: parseFloat(cell.closest('.chain-row').dataset.ceLtp), sym: makeSym(sym,exp,strike,'CE')},
-            {strike, opt_type:'PE', side:'SELL', ltp: parseFloat(cell.closest('.chain-row').dataset.peLtp), sym: makeSym(sym,exp,strike,'PE')},
+            {strike, opt_type:'CE', side:'SELL', ltp: Number.parseFloat(cell.closest('.chain-row').dataset.ceLtp), sym: makeSym(sym,exp,strike,'CE')},
+            {strike, opt_type:'PE', side:'SELL', ltp: Number.parseFloat(cell.closest('.chain-row').dataset.peLtp), sym: makeSym(sym,exp,strike,'PE')},
         ];
     } else if (_mode === 'strangle') {
         if (optType === 'CE') addOrReplace('CE', {strike, opt_type:'CE', side:'SELL', ltp, sym: makeSym(sym,exp,strike,'CE')});
@@ -1162,7 +1162,7 @@ function renderLegs() {
 function renderChainSelection() {
     document.querySelectorAll('.chain-row').forEach(row => {
         row.classList.remove('sel-ce','sel-pe');
-        const strike = parseFloat(row.dataset.strike);
+        const strike = Number.parseFloat(row.dataset.strike);
         if (_legs.some(l => l.strike===strike && l.opt_type==='CE')) row.classList.add('sel-ce');
         if (_legs.some(l => l.strike===strike && l.opt_type==='PE')) row.classList.add('sel-pe');
     });
@@ -1172,13 +1172,13 @@ async function executeStrategy() {
     if (_legs.length === 0) return;
     const btn = document.getElementById('btn-execute');
     btn.disabled = true; btn.textContent = 'Placing…';
-    const lots      = parseInt(document.getElementById('inp-lots').value)||1;
+    const lots      = Number.parseInt(document.getElementById('inp-lots').value)||1;
     const orderType = document.getElementById('inp-order-type').value;
     const basketId  = document.getElementById('inp-basket').value;
     const newName   = document.getElementById('inp-new-basket-name').value.trim();
     const modeLabel = {straddle:'Short Straddle',strangle:'Short Strangle',iron_condor:'Iron Condor',bull_spread:'Bull Call Spread',bear_spread:'Bear Put Spread'}[_mode]||_mode;
     const payload = {
-        basket_id: basketId==='new'?null:parseInt(basketId),
+        basket_id: basketId==='new'?null:Number.parseInt(basketId),
         basket_name: newName || `${document.getElementById('cfg-symbol').value} ${modeLabel}`,
         strategy_name: modeLabel,
         legs: _legs.map(l => ({
@@ -1280,7 +1280,7 @@ function pbOnShiftChange() {
 
 function pbOnLotsChange() {
     // Keep max-lots in sync unless the user has manually overridden it
-    const lots    = parseInt(document.getElementById('pbc-lots').value) || 1;
+    const lots    = Number.parseInt(document.getElementById('pbc-lots').value) || 1;
     const maxLots = document.getElementById('pbc-max-lots');
     if (maxLots.dataset.manualOverride !== 'true') {
         maxLots.value = lots;
@@ -1293,9 +1293,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxLots = document.getElementById('pbc-max-lots');
     if (maxLots) {
         maxLots.addEventListener('input', () => {
-            const lots = parseInt(document.getElementById('pbc-lots').value) || 1;
+            const lots = Number.parseInt(document.getElementById('pbc-lots').value) || 1;
             // Only flag as manual if the user set a different value from lots
-            maxLots.dataset.manualOverride = (parseInt(maxLots.value) !== lots) ? 'true' : 'false';
+            maxLots.dataset.manualOverride = (Number.parseInt(maxLots.value) !== lots) ? 'true' : 'false';
             pbSchedulePrecheck();
         });
     }
@@ -1314,20 +1314,20 @@ function _pbCollectConfig() {
         scrip:               g('pb-scrip').value,
         expiry:              g('pb-expiry').value,
         strategy:            g('pb-strategy').value,
-        lots:                parseInt(g('pbc-lots').value) || 1,
-        max_lots_per_order:  parseInt(g('pbc-max-lots').value) || null,
-        atm_strikes_to_sell: parseInt(g('pbc-atm-strikes')?.value) || 0,
-        sell_offset:         parseInt(g('pbc-sell-offset')?.value) || 2,
-        wing_offset:         parseInt(g('pbc-wing-offset')?.value) || 4,
-        spread_width:        parseInt(g('pbc-spread-width')?.value) || 1,
+        lots:                Number.parseInt(g('pbc-lots').value) || 1,
+        max_lots_per_order:  Number.parseInt(g('pbc-max-lots').value) || null,
+        atm_strikes_to_sell: Number.parseInt(g('pbc-atm-strikes')?.value) || 0,
+        sell_offset:         Number.parseInt(g('pbc-sell-offset')?.value) || 2,
+        wing_offset:         Number.parseInt(g('pbc-wing-offset')?.value) || 4,
+        spread_width:        Number.parseInt(g('pbc-spread-width')?.value) || 1,
         hedge:               g('pbc-hedge')?.checked || false,
-        hedge_offset:        parseInt(g('pbc-hedge-offset')?.value) || 2,
-        strike_shift:        g('pbc-shift-toggle')?.checked ? (parseInt(g('pbc-strike-shift')?.value) || 0) : 0,
+        hedge_offset:        Number.parseInt(g('pbc-hedge-offset')?.value) || 2,
+        strike_shift:        g('pbc-shift-toggle')?.checked ? (Number.parseInt(g('pbc-strike-shift')?.value) || 0) : 0,
         entry_time:          g('pbc-entry-time').value || '09:20',
-        vix_min:             g('pbc-vix-min').value !== '' ? parseFloat(g('pbc-vix-min').value) : null,
-        vix_max:             g('pbc-vix-max').value !== '' ? parseFloat(g('pbc-vix-max').value) : null,
-        pt_pct:              parseFloat(g('pbc-pt-pct').value) || 50,
-        lg_pct:              parseFloat(g('pbc-lg-pct').value) || 100,
+        vix_min:             g('pbc-vix-min').value !== '' ? Number.parseFloat(g('pbc-vix-min').value) : null,
+        vix_max:             g('pbc-vix-max').value !== '' ? Number.parseFloat(g('pbc-vix-max').value) : null,
+        pt_pct:              Number.parseFloat(g('pbc-pt-pct').value) || 50,
+        lg_pct:              Number.parseFloat(g('pbc-lg-pct').value) || 100,
         eod_exit:            g('pbc-eod-exit').checked,
         name:                g('pbc-name').value.trim(),
     };

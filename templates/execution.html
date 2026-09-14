@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <style>
 /* ── Execution page ────────────────────────────────────────────────── */
@@ -414,7 +414,7 @@ function closeModify() {
     document.getElementById('modify-modal').classList.remove('open');
 }
 async function submitModify() {
-    const price = parseFloat(document.getElementById('modify-price').value);
+    const price = Number.parseFloat(document.getElementById('modify-price').value);
     if (!price || price <= 0) { alert('Enter a valid price.'); return; }
     try {
         await fetch(`/execution/modify/${_modifyOrderId}`, {
@@ -446,9 +446,9 @@ async function placeManual() {
     const exch   = document.getElementById('ep-exch').value;
     const prod   = document.getElementById('ep-product').value;
     const side   = document.getElementById('ep-side').value;
-    const qty    = parseInt(document.getElementById('ep-qty').value) || 0;
+    const qty    = Number.parseInt(document.getElementById('ep-qty').value) || 0;
     const otype  = document.getElementById('ep-otype').value;
-    const price  = parseFloat(document.getElementById('ep-price').value) || null;
+    const price  = Number.parseFloat(document.getElementById('ep-price').value) || null;
     const basket = document.getElementById('ep-basket').value;
     const bname  = document.getElementById('ep-basket-name').value.trim();
 
@@ -464,7 +464,7 @@ async function placeManual() {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                basket_id:     basket === 'new' ? null : parseInt(basket),
+                basket_id:     basket === 'new' ? null : Number.parseInt(basket),
                 basket_name:   bname,
                 strategy_name: 'Manual',
                 legs: [{

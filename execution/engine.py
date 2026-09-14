@@ -14,6 +14,15 @@ from typing import Callable, Optional
 
 log = logging.getLogger(__name__)
 
+# Strong references to background tasks so they are not garbage-collected
+_bg_tasks: set[asyncio.Task] = set()
+
+def _track(t: asyncio.Task) -> asyncio.Task:
+    _bg_tasks.add(t)
+    t.add_done_callback(_bg_tasks.discard)
+    return t
+
+
 # ── In-memory order book ──────────────────────────────────────────────────────
 # Persists for the lifetime of the process (session-scoped).
 # Structure: order_id (str) → order record dict.
@@ -112,7 +121,7 @@ async def cancel_order(order_id: str) -> None:
     async with _lock:
         if order_id in _order_book:
             _order_book[order_id]["status"] = "CANCELLED"
-    log.info(f"Execution: cancelled order {order_id}")
+    log.info("Execution: cancelled order %s", str(order_id).replace('\n', ' ').replace('\r', ' '))
 
 
 async def modify_order(order_id: str, new_price: float) -> None:
@@ -130,7 +139,8 @@ async def modify_order(order_id: str, new_price: float) -> None:
     )
     async with _lock:
         _order_book[order_id]["price"] = round(float(new_price), 2)
-    log.info(f"Execution: modified order {order_id} → price={new_price}")
+    log.info("Execution: modified order %s → price=%s",
+             str(order_id).replace('\n', ' ').replace('\r', ' '), new_price)
 
 
 # ── Query ──────────────────────────────────────────────────────────────────────
@@ -191,12 +201,12 @@ async def poll_orders(assign_fn: Optional[Callable] = None) -> None:
                         and prev_status != "COMPLETE"
                         and assign_fn
                         and rec.get("basket_id") is not None):
-                    asyncio.create_task(assign_fn(
+                    _track(asyncio.create_task(assign_fn(
                         rec["basket_id"],
                         rec["tradingsymbol"],
                         rec["exchange"],
                         rec["product"],
-                    ))
+                    )))
                     log.info(
                         f"Execution: {oid} filled — auto-assigning "
                         f"{rec['tradingsymbol']} → basket {rec['basket_id']}"

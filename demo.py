@@ -17,7 +17,7 @@ from typing import Optional
 from fastapi import Body, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from rm.engine import run_engine, reset_basket, rearm_basket, get_basket_state
 from strategies import templates as strat_templates
@@ -271,18 +271,28 @@ async def _price_drift_loop():
         _update_vix_indicators(_VIX)
 
 
+# Background tasks anchored here so they are not garbage-collected
+_bg_tasks: set[asyncio.Task] = set()
+
+def _track(t: asyncio.Task) -> asyncio.Task:
+    """Keep a strong reference to a task so GC cannot collect it."""
+    _bg_tasks.add(t)
+    t.add_done_callback(_bg_tasks.discard)
+    return t
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Seed prices
     for p in _POSITIONS:
         _PRICES[p["instrument_token"]] = p["last_price"]
 
-    asyncio.create_task(_price_drift_loop())
-    asyncio.create_task(run_engine(
+    _track(asyncio.create_task(_price_drift_loop()))
+    _track(asyncio.create_task(run_engine(
         get_baskets_fn=_get_baskets_for_engine,
         ltp_fn=_demo_ltp,
         exit_fn=_demo_exit,
-    ))
+    )))
 
     # ── Strategy auto-execution engine ────────────────────────────────
     async def _demo_place_orders_fn(tmpl: dict, legs: list) -> int:
@@ -305,21 +315,21 @@ async def lifespan(app: FastAPI):
             )
             rec["placed_at"] = _time_mod.time()
             _DEMO_ORDERS[oid] = rec
-            asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.0)))
+            _track(asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.0))))
 
         return bid
 
     def _demo_set_rm_fn(basket_id: int, rm: dict):
         _rm[basket_id] = rm
 
-    asyncio.create_task(strat_engine.run_strategy_engine(
+    _track(asyncio.create_task(strat_engine.run_strategy_engine(
         get_templates_fn = strat_templates.list_templates,
         get_vix_fn       = lambda: _VIX,
         get_chain_fn     = _generate_chain,
         place_orders_fn  = _demo_place_orders_fn,
         set_rm_fn        = _demo_set_rm_fn,
         set_status_fn    = strat_templates.set_status,
-    ))
+    )))
 
     yield
 
@@ -327,7 +337,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-_env = Environment(loader=FileSystemLoader("templates"), cache_size=0, auto_reload=True)
+_env = Environment(
+    loader=FileSystemLoader("templates"),
+    autoescape=select_autoescape(["html"]),
+    cache_size=0,
+    auto_reload=True,
+)
 
 
 def render(name: str, ctx: dict) -> HTMLResponse:
@@ -833,7 +848,7 @@ async def demo_place_orders(request: Request):
         placed.append(rec)
 
         # Schedule simulated fill
-        asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.5)))
+        _track(asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.5))))
 
     return JSONResponse({
         "basket_id":   bid,
@@ -1057,7 +1072,7 @@ async def execute_now(tid: int):
             )
             rec["placed_at"] = _time_mod.time()
             _DEMO_ORDERS[oid] = rec
-            asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.0)))
+            _track(asyncio.create_task(_simulate_fill(oid, delay=random.uniform(1.5, 3.0))))
         return bid
 
     def _set_rm(basket_id, rm):
