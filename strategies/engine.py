@@ -145,6 +145,11 @@ def build_legs(strat_type: str, symbol: str, expiry: str,
 
     # ── Iron Condor ───────────────────────────────────────────────────
     if strat_type == "iron_condor":
+        if wing_off <= sell_off:
+            raise ValueError(
+                f"iron_condor: wing_offset ({wing_off}) must be > sell_offset ({sell_off}) "
+                "to produce a valid credit spread"
+            )
         return [
             leg(atm + step * sell_off, "CE", "SELL"),
             leg(atm + step * wing_off, "CE", "BUY"),
@@ -236,7 +241,7 @@ async def execute_template(
     lot_size = chain["lot_size"]
     qty      = lots * lot_size
 
-    legs     = build_legs(tmpl["strategy_type"], symbol, expiry, chain, qty)
+    legs     = build_legs(tmpl["strategy_type"], symbol, expiry, chain, qty, config=tmpl)
     premium  = total_sell_premium(legs)
     basket_id = await place_orders_fn(tmpl, legs)
     rm        = build_rm(tmpl, premium)

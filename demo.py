@@ -939,9 +939,9 @@ async def api_precheck(payload: dict = Body(...)):
     for l in legs:
         premium   = l["price"] * l["qty"]
         brokerage += 20.0                                            # flat ₹20/order
-        stt       += round(premium * 0.001, 2) if l["side"] == "SELL" else 0.0
+        stt       += round(premium * 0.000625, 2) if l["side"] == "SELL" else 0.0   # NSE options: 0.0625%
         exchange  += round(premium * 0.000495, 2)
-        sebi      += round(premium * 1e-7, 2)
+        sebi      += round(premium * 1e-6, 2)                                        # ₹10 per crore
     gst = round((brokerage + exchange + sebi) * 0.18, 2)
     charges = {
         "brokerage": round(brokerage, 2),

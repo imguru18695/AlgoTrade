@@ -1279,14 +1279,27 @@ function pbOnShiftChange() {
 }
 
 function pbOnLotsChange() {
-    // Keep max-lots in sync if it hasn't been manually changed
+    // Keep max-lots in sync unless the user has manually overridden it
     const lots    = parseInt(document.getElementById('pbc-lots').value) || 1;
     const maxLots = document.getElementById('pbc-max-lots');
-    if (parseInt(maxLots.value) > lots || maxLots.dataset.synced !== 'manual') {
+    if (maxLots.dataset.manualOverride !== 'true') {
         maxLots.value = lots;
     }
     pbSchedulePrecheck();
 }
+
+// Mark max-lots as manually overridden when the user directly edits it
+document.addEventListener('DOMContentLoaded', () => {
+    const maxLots = document.getElementById('pbc-max-lots');
+    if (maxLots) {
+        maxLots.addEventListener('input', () => {
+            const lots = parseInt(document.getElementById('pbc-lots').value) || 1;
+            // Only flag as manual if the user set a different value from lots
+            maxLots.dataset.manualOverride = (parseInt(maxLots.value) !== lots) ? 'true' : 'false';
+            pbSchedulePrecheck();
+        });
+    }
+});
 
 // Debounced precheck
 let _pbPrecheckTimer = null;
@@ -1311,8 +1324,8 @@ function _pbCollectConfig() {
         hedge_offset:        parseInt(g('pbc-hedge-offset')?.value) || 2,
         strike_shift:        g('pbc-shift-toggle')?.checked ? (parseInt(g('pbc-strike-shift')?.value) || 0) : 0,
         entry_time:          g('pbc-entry-time').value || '09:20',
-        vix_min:             parseFloat(g('pbc-vix-min').value) || null,
-        vix_max:             parseFloat(g('pbc-vix-max').value) || null,
+        vix_min:             g('pbc-vix-min').value !== '' ? parseFloat(g('pbc-vix-min').value) : null,
+        vix_max:             g('pbc-vix-max').value !== '' ? parseFloat(g('pbc-vix-max').value) : null,
         pt_pct:              parseFloat(g('pbc-pt-pct').value) || 50,
         lg_pct:              parseFloat(g('pbc-lg-pct').value) || 100,
         eod_exit:            g('pbc-eod-exit').checked,
@@ -1414,12 +1427,16 @@ function pbReset() {
 function _pbCollectTemplate() {
     const cfg = _pbCollectConfig();
     if (!cfg.name) cfg.name = `${cfg.scrip} ${cfg.strategy}`;
-    // Map to template schema
+    // Derive expiry_rule from the selected expiry date
+    // Store the actual date too so execute_template can use it directly
+    const expiry = document.getElementById('pb-expiry').value;
+    const expiry_rule = _pbExpiry2Rule(expiry);
     return {
         name:                cfg.name,
         strategy_type:       cfg.strategy,
         underlying:          cfg.scrip,
-        expiry_rule:         'nearest_weekly',   // expiry field maps to closest rule
+        expiry_rule,
+        expiry_date:         expiry,     // explicit date — used by engine over rule
         lots:                cfg.lots,
         max_lots_per_order:  cfg.max_lots_per_order,
         atm_strikes_to_sell: cfg.atm_strikes_to_sell,
@@ -1437,53 +1454,74 @@ function _pbCollectTemplate() {
     };
 }
 
+function _pbExpiry2Rule(dateStr) {
+    // Best-effort: map a selected expiry ISO date to a rule name for display
+    // The engine will use expiry_date directly if present, so this is cosmetic
+    if (!dateStr) return 'nearest_weekly';
+    const d = new Date(dateStr);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.round((d - today) / 86400000);
+    if (diff <= 7)  return 'nearest_weekly';
+    if (diff <= 14) return 'next_weekly';
+    return 'nearest_monthly';
+}
+
 async function pbSave() {
     const data = _pbCollectTemplate();
     const resultEl = document.getElementById('pb-action-result');
     resultEl.textContent = 'Saving...';
-    const r = await fetch('/strategies/templates/create', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data),
-    });
-    const res = await r.json();
-    if (res.status === 'ok') {
-        resultEl.className = 'pb-action-result ok';
-        resultEl.textContent = 'Saved. Reloading...';
-        setTimeout(() => location.reload(), 900);
-    } else {
+    try {
+        const r = await fetch('/strategies/templates/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        const res = await r.json();
+        if (res.status === 'ok') {
+            resultEl.className = 'pb-action-result ok';
+            resultEl.textContent = 'Saved. Reloading...';
+            setTimeout(() => location.reload(), 900);
+        } else {
+            resultEl.className = 'pb-action-result err';
+            resultEl.textContent = 'Error: ' + (res.error || 'Unknown');
+        }
+    } catch(e) {
         resultEl.className = 'pb-action-result err';
-        resultEl.textContent = 'Error: ' + (res.error || 'Unknown');
+        resultEl.textContent = 'Network error — could not save.';
     }
 }
 
 async function pbExecuteNow() {
     const resultEl = document.getElementById('pb-action-result');
     resultEl.textContent = 'Saving...';
-    // Save first
-    const data = _pbCollectTemplate();
-    const r1 = await fetch('/strategies/templates/create', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data),
-    });
-    const res1 = await r1.json();
-    if (res1.status !== 'ok') {
+    try {
+        const data = _pbCollectTemplate();
+        const r1 = await fetch('/strategies/templates/create', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data),
+        });
+        const res1 = await r1.json();
+        if (res1.status !== 'ok') {
+            resultEl.className = 'pb-action-result err';
+            resultEl.textContent = 'Save failed: ' + (res1.error || 'Unknown');
+            return;
+        }
+        // Execute
+        resultEl.textContent = 'Executing...';
+        const tid = res1.template?.id;
+        if (!tid) { resultEl.textContent = 'No template ID returned.'; return; }
+        const r2 = await fetch(`/strategies/templates/${tid}/execute-now`, {method:'POST'});
+        const res2 = await r2.json();
+        if (r2.ok && res2.status === 'ok') {
+            resultEl.className = 'pb-action-result ok';
+            resultEl.textContent = `Basket "${res2.basket_name}" created — go to Execution tab`;
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            resultEl.className = 'pb-action-result err';
+            resultEl.textContent = 'Execute failed: ' + (res2.error || 'Unknown');
+        }
+    } catch(e) {
         resultEl.className = 'pb-action-result err';
-        resultEl.textContent = 'Save failed: ' + (res1.error || 'Unknown');
-        return;
-    }
-    // Execute
-    resultEl.textContent = 'Executing...';
-    const tid = res1.template?.id;
-    if (!tid) { resultEl.textContent = 'No template ID returned.'; return; }
-    const r2 = await fetch(`/strategies/templates/${tid}/execute-now`, {method:'POST'});
-    const res2 = await r2.json();
-    if (r2.ok && res2.status === 'ok') {
-        resultEl.className = 'pb-action-result ok';
-        resultEl.textContent = `Basket "${res2.basket_name}" created — go to Execution tab`;
-        setTimeout(() => location.reload(), 1500);
-    } else {
-        resultEl.className = 'pb-action-result err';
-        resultEl.textContent = 'Execute failed: ' + (res2.error || 'Unknown');
+        resultEl.textContent = 'Network error — could not execute.';
     }
 }
 </script>
