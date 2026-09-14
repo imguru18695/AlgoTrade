@@ -1,4 +1,5 @@
 ﻿{% extends "base.html" %}
+{% from "macros.html" import rm_2field_card %}
 {% block content %}
 {# Management page — full basket/position/RM control panel #}
 
@@ -208,105 +209,22 @@
 
                 <!-- Profit Target -->
                 {% set pt = b.rm %}
-                <div class="rm-card" id="pt-card-{{ b.id }}">
-                    <div class="rm-card-header">
-                        <div class="rm-card-title">
-                            <span class="rm-card-icon pt-icon">↑</span>
-                            <span>Profit Target</span>
-                        </div>
-                    </div>
-                    <div class="rm-card-body" id="pt-body-{{ b.id }}">
-                        <form method="post" action="/baskets/{{ b.id }}/rm/profit-target"
-                              onsubmit="return validatePT({{ b.id }})">
-                            <input type="hidden" name="active" id="pt-active-{{ b.id }}"
-                                   value="{{ '1' if pt.get('pt_active') else '0' }}">
-                            <div class="rm-toggle-row">
-                                <label class="toggle">
-                                    <input type="checkbox" id="pt-toggle-{{ b.id }}"
-                                           aria-label="Enable Profit Target"
-                                           {{ 'checked' if pt.get('pt_active') else '' }}
-                                           onchange="toggleRM('pt', {{ b.id }}, this.checked)">
-                                    <span class="toggle-track"></span>
-                                </label>
-                                <span class="rm-toggle-label">Enable Profit Target</span>
-                            </div>
-                            <div class="rm-fields" id="pt-fields-{{ b.id }}">
-                                <div class="rm-field">
-                                    <label for="pt-inr-{{ b.id }}">Target P&amp;L (₹)</label>
-                                    <input type="number" name="inr" min="1" step="1"
-                                           id="pt-inr-{{ b.id }}"
-                                           value="{{ pt.get('pt_inr') or '' }}"
-                                           placeholder="e.g. 15000">
-                                </div>
-                                <div class="rm-field">
-                                    <label for="pt-ticks-{{ b.id }}">Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
-                                    <input type="number" name="ticks" min="1" step="1"
-                                           id="pt-ticks-{{ b.id }}"
-                                           value="{{ pt.get('pt_ticks') or '' }}"
-                                           placeholder="e.g. 5 = holds for 25s">
-                                </div>
-                            </div>
-                            <div class="rm-card-footer">
-                                <button type="submit" class="rm-btn-save">Save</button>
-                                <button type="button" class="rm-btn-cancel"
-                                        onclick="cancelRM('pt', {{ b.id }},
-                                            {{ pt.get('pt_inr') or 'null' }},
-                                            {{ pt.get('pt_ticks') or 'null' }},
-                                            {{ 'true' if pt.get('pt_active') else 'false' }})">Cancel</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                {{ rm_2field_card(
+                    'pt', b.id, 'Profit Target', '↑', 'pt-icon',
+                    'profit-target', 'validatePT',
+                    pt.get('pt_active'), 'Enable Profit Target',
+                    'Target P&amp;L (₹)', pt.get('pt_inr'), 'e.g. 15000',
+                    pt.get('pt_ticks')
+                ) }}
 
                 <!-- Loss Guard -->
-                <div class="rm-card" id="lg-card-{{ b.id }}">
-                    <div class="rm-card-header">
-                        <div class="rm-card-title">
-                            <span class="rm-card-icon lg-icon">↓</span>
-                            <span>Loss Guard</span>
-                        </div>
-                    </div>
-                    <div class="rm-card-body" id="lg-body-{{ b.id }}">
-                        <form method="post" action="/baskets/{{ b.id }}/rm/loss-guard">
-                            <input type="hidden" name="active" id="lg-active-{{ b.id }}"
-                                   value="{{ '1' if pt.get('lg_active') else '0' }}">
-                            <div class="rm-toggle-row">
-                                <label class="toggle">
-                                    <input type="checkbox" id="lg-toggle-{{ b.id }}"
-                                           aria-label="Enable Loss Guard"
-                                           {{ 'checked' if pt.get('lg_active') else '' }}
-                                           onchange="toggleRM('lg', {{ b.id }}, this.checked)">
-                                    <span class="toggle-track"></span>
-                                </label>
-                                <span class="rm-toggle-label">Enable Loss Guard</span>
-                            </div>
-                            <div class="rm-fields" id="lg-fields-{{ b.id }}">
-                                <div class="rm-field">
-                                    <label for="lg-inr-{{ b.id }}">Max Loss (₹)</label>
-                                    <input type="number" name="inr" min="1" step="1"
-                                           id="lg-inr-{{ b.id }}"
-                                           value="{{ pt.get('lg_inr') or '' }}"
-                                           placeholder="e.g. 10000">
-                                </div>
-                                <div class="rm-field">
-                                    <label for="pt-ticks-{{ b.id }}">Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
-                                    <input type="number" name="ticks" min="1" step="1"
-                                           id="lg-ticks-{{ b.id }}"
-                                           value="{{ pt.get('lg_ticks') or '' }}"
-                                           placeholder="e.g. 5 = holds for 25s">
-                                </div>
-                            </div>
-                            <div class="rm-card-footer">
-                                <button type="submit" class="rm-btn-save">Save</button>
-                                <button type="button" class="rm-btn-cancel"
-                                        onclick="cancelRM('lg', {{ b.id }},
-                                            {{ pt.get('lg_inr') or 'null' }},
-                                            {{ pt.get('lg_ticks') or 'null' }},
-                                            {{ 'true' if pt.get('lg_active') else 'false' }})">Cancel</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                {{ rm_2field_card(
+                    'lg', b.id, 'Loss Guard', '↓', 'lg-icon',
+                    'loss-guard', '',
+                    pt.get('lg_active'), 'Enable Loss Guard',
+                    'Max Loss (₹)', pt.get('lg_inr'), 'e.g. 10000',
+                    pt.get('lg_ticks')
+                ) }}
 
                 <!-- Profit Shield -->
                 <div class="rm-card" id="ps-card-{{ b.id }}">

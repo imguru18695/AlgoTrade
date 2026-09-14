@@ -1,0 +1,79 @@
+{#
+  Shared Jinja2 macros for management/index templates.
+  Import with:  {% from "macros.html" import rm_2field_card %}
+#}
+
+{# ── rm_2field_card ────────────────────────────────────────────────────────────
+   Renders a standard RM card (Profit Target or Loss Guard) that has exactly two
+   number fields — a primary value field and a "confirm ticks" field — plus the
+   enable/disable toggle.
+
+   Parameters
+   ----------
+   type          : short prefix used in all element ids, e.g. "pt" or "lg"
+   bid           : basket id (integer)
+   title         : card heading text, e.g. "Profit Target"
+   icon          : single character/symbol for the icon span, e.g. "↑"
+   icon_class    : CSS class on the icon span, e.g. "pt-icon"
+   rm_path       : last segment of the POST action URL, e.g. "profit-target"
+   onsubmit_fn   : JS validation function name (or "" for none), e.g. "validatePT"
+   active        : bool — current enabled state
+   toggle_label  : accessible label text for the toggle, e.g. "Enable Profit Target"
+   f1_label      : label text for the primary value field, e.g. "Target P&L (₹)"
+   f1_val        : current value of the primary field (may be None)
+   f1_placeholder: placeholder text for the primary field
+#}
+{% macro rm_2field_card(type, bid, title, icon, icon_class, rm_path, onsubmit_fn,
+                        active, toggle_label,
+                        f1_label, f1_val, f1_placeholder,
+                        ticks_val) %}
+<div class="rm-card" id="{{ type }}-card-{{ bid }}">
+    <div class="rm-card-header">
+        <div class="rm-card-title">
+            <span class="rm-card-icon {{ icon_class }}">{{ icon }}</span>
+            <span>{{ title }}</span>
+        </div>
+    </div>
+    <div class="rm-card-body" id="{{ type }}-body-{{ bid }}">
+        <form method="post" action="/baskets/{{ bid }}/rm/{{ rm_path }}"
+              {% if onsubmit_fn %}onsubmit="return {{ onsubmit_fn }}({{ bid }})"{% endif %}>
+            <input type="hidden" name="active" id="{{ type }}-active-{{ bid }}"
+                   value="{{ '1' if active else '0' }}">
+            <div class="rm-toggle-row">
+                <label class="toggle">
+                    <input type="checkbox" id="{{ type }}-toggle-{{ bid }}"
+                           aria-label="{{ toggle_label }}"
+                           {{ 'checked' if active else '' }}
+                           onchange="toggleRM('{{ type }}', {{ bid }}, this.checked)">
+                    <span class="toggle-track"></span>
+                </label>
+                <span class="rm-toggle-label">{{ toggle_label }}</span>
+            </div>
+            <div class="rm-fields" id="{{ type }}-fields-{{ bid }}">
+                <div class="rm-field">
+                    <label for="{{ type }}-inr-{{ bid }}">{{ f1_label }}</label>
+                    <input type="number" name="inr" min="1" step="1"
+                           id="{{ type }}-inr-{{ bid }}"
+                           value="{{ f1_val or '' }}"
+                           placeholder="{{ f1_placeholder }}">
+                </div>
+                <div class="rm-field">
+                    <label for="{{ type }}-ticks-{{ bid }}">Confirm Checks <span class="rm-field-hint">× 5 sec each</span></label>
+                    <input type="number" name="ticks" min="1" step="1"
+                           id="{{ type }}-ticks-{{ bid }}"
+                           value="{{ ticks_val or '' }}"
+                           placeholder="e.g. 5 = holds for 25s">
+                </div>
+            </div>
+            <div class="rm-card-footer">
+                <button type="submit" class="rm-btn-save">Save</button>
+                <button type="button" class="rm-btn-cancel"
+                        onclick="cancelRM('{{ type }}', {{ bid }},
+                            {{ f1_val or 'null' }},
+                            {{ ticks_val or 'null' }},
+                            {{ 'true' if active else 'false' }})">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endmacro %}
