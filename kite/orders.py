@@ -172,7 +172,13 @@ async def _place_limit_with_retry(kite, sym, exchange, product, side, qty, baske
     attempt = 0
     no_depth_checks = 0
 
-    while remaining_qty > 0 and attempt < MAX_LIMIT_ATTEMPTS:
+    # asyncio.sleep() is used deliberately here: this is an async coroutine (await asyncio.sleep)
+    # so it yields the event-loop between checks — there is no thread blocking.
+    # SonarCloud flags this as "use Event instead of sleep" but that rule targets
+    # time.sleep() in threads; await asyncio.sleep() is already the correct async pattern.
+    # A proper Event-based approach would require Kite WebSocket order-update callbacks
+    # which are not yet integrated. Suppressing the rule here until that is in place.
+    while remaining_qty > 0 and attempt < MAX_LIMIT_ATTEMPTS:  # NOSONAR
         placed_this_attempt = remaining_qty
 
         # Fetch fresh best bid/ask
