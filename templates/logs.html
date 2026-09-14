@@ -221,8 +221,8 @@
 <form method="get" action="/logs">
     <div class="filter-bar">
         <div class="filter-group">
-            <label>Basket</label>
-            <select name="basket_name">
+            <label for="log-basket">Basket</label>
+            <select name="basket_name" id="log-basket">
                 <option value="">All Baskets</option>
                 {% for name in basket_names %}
                 <option value="{{ name }}" {% if basket_name == name %}selected{% endif %}>{{ name }}</option>
@@ -230,12 +230,12 @@
             </select>
         </div>
         <div class="filter-group">
-            <label>From Date</label>
-            <input type="date" name="from_date" value="{{ from_date }}">
+            <label for="log-from">From Date</label>
+            <input type="date" name="from_date" id="log-from" value="{{ from_date }}">
         </div>
         <div class="filter-group">
-            <label>To Date</label>
-            <input type="date" name="to_date" value="{{ to_date }}">
+            <label for="log-to">To Date</label>
+            <input type="date" name="to_date" id="log-to" value="{{ to_date }}">
         </div>
         <button type="submit" class="btn-search">Search</button>
     </div>

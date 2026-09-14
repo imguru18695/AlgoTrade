@@ -704,7 +704,7 @@
 <!-- Config bar -->
 <div class="strat-config">
     <div class="cfg-group">
-        <label>Underlying</label>
+        <label for="cfg-symbol">Underlying</label>
         <select id="cfg-symbol" onchange="loadChain()">
             {% for u in underlyings %}
             <option value="{{ u }}">{{ u }}</option>
@@ -712,7 +712,7 @@
         </select>
     </div>
     <div class="cfg-group">
-        <label>Expiry</label>
+        <label for="cfg-expiry">Expiry</label>
         <select id="cfg-expiry" onchange="loadChain()">
             {% for e in expiries %}
             <option value="{{ e }}">{{ e }}</option>
@@ -758,18 +758,18 @@
         <hr style="border:none;border-top:1px solid var(--border);margin:0;">
         <div class="entry-fields">
             <div class="entry-field">
-                <label>Lots</label>
+                <label for="inp-lots">Lots</label>
                 <input type="number" id="inp-lots" value="1" min="1" max="50">
             </div>
             <div class="entry-field">
-                <label>Order Type</label>
+                <label for="inp-order-type">Order Type</label>
                 <select id="inp-order-type">
                     <option value="LIMIT">LIMIT</option>
                     <option value="MARKET">MARKET</option>
                 </select>
             </div>
             <div class="entry-field">
-                <label>Add to Basket</label>
+                <label for="inp-basket">Add to Basket</label>
                 <select id="inp-basket" onchange="onBasketChange()">
                     <option value="new">+ Create New Basket</option>
                     {% for b in baskets %}
@@ -777,6 +777,7 @@
                     {% endfor %}
                 </select>
                 <input type="text" id="inp-new-basket-name" class="new-basket-name show"
+                    aria-label="Basket name"
                     placeholder="Basket name (optional)">
             </div>
         </div>

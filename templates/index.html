@@ -222,6 +222,7 @@
                             <div class="rm-toggle-row">
                                 <label class="toggle">
                                     <input type="checkbox" id="pt-toggle-{{ b.id }}"
+                                           aria-label="Enable Profit Target"
                                            {{ 'checked' if pt.get('pt_active') else '' }}
                                            onchange="toggleRM('pt', {{ b.id }}, this.checked)">
                                     <span class="toggle-track"></span>
@@ -271,6 +272,7 @@
                             <div class="rm-toggle-row">
                                 <label class="toggle">
                                     <input type="checkbox" id="lg-toggle-{{ b.id }}"
+                                           aria-label="Enable Loss Guard"
                                            {{ 'checked' if pt.get('lg_active') else '' }}
                                            onchange="toggleRM('lg', {{ b.id }}, this.checked)">
                                     <span class="toggle-track"></span>
@@ -321,6 +323,7 @@
                             <div class="rm-toggle-row">
                                 <label class="toggle">
                                     <input type="checkbox" id="ps-toggle-{{ b.id }}"
+                                           aria-label="Enable Profit Shield"
                                            {{ 'checked' if pt.get('ps_active') else '' }}
                                            onchange="toggleRM('ps', {{ b.id }}, this.checked)">
                                     <span class="toggle-track"></span>
@@ -382,6 +385,7 @@
                         </div>
                         <label class="toggle">
                             <input type="checkbox" name="eod_checkbox" id="eod-toggle-{{ b.id }}"
+                                   aria-label="EOD Auto-Exit"
                                    {{ 'checked' if b.rm.get('eod_exit') else '' }}
                                    onchange="submitEodToggle({{ b.id }}, this.checked)">
                             <span class="toggle-track"></span>
@@ -399,6 +403,7 @@
                         </div>
                         <label class="toggle">
                             <input type="checkbox" name="dof_checkbox" id="dof-toggle-{{ b.id }}"
+                                   aria-label="Delete Basket on Fire"
                                    {{ 'checked' if b.rm.get('delete_on_fire', 1) else '' }}
                                    onchange="submitDofToggle({{ b.id }}, this.checked)">
                             <span class="toggle-track"></span>
