@@ -316,24 +316,88 @@
     cursor: help; vertical-align: middle;
 }
 
-/* Pre-execution panel */
+/* ── Pre-execution panel ─────────────────────────────────────────── */
 .pb-precheck-panel {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius-sm); padding: 16px 18px;
     display: flex; flex-direction: column; gap: 12px;
 }
-.pb-precheck-loading { font-size: 12px; color: var(--text-3); }
-.pb-precheck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.pb-precheck-loading { font-size: 12px; color: var(--text-3); padding: 16px; }
+/* 3-column institutional layout */
+.pb-precheck-grid { display: grid; grid-template-columns: 250px 1fr 340px; min-height: 280px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+.pb-panel { display: flex; flex-direction: column; }
+.pb-panel + .pb-panel { border-left: 1px solid var(--border); }
+.pb-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-2); padding: 9px 14px 8px; border-bottom: 1px solid var(--border);
+}
+/* Left details panel */
+.pb-detail-row { display: flex; align-items: baseline; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--border); gap: 8px; }
+.pb-detail-row:last-child { border-bottom: none; }
+.pb-detail-label { font-size: 11px; color: var(--text-2); white-space: nowrap; flex-shrink: 0; }
+.pb-detail-val   { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+.pb-detail-val.profit { color: var(--profit); }
+.pb-detail-val.loss   { color: var(--loss); }
+.pb-detail-val.muted  { color: var(--text-2); font-weight: 600; }
+.pb-detail-sub { font-size: 10.5px; color: var(--text-2); padding: 0 14px 8px; margin-top: -3px; line-height: 1.6; }
+.pb-greeks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--border); }
+.pb-greek-item { display: flex; align-items: baseline; justify-content: space-between; padding: 5px 14px; border-bottom: 1px solid var(--border); gap: 6px; }
+.pb-greek-item:nth-last-child(-n+2) { border-bottom: none; }
+.pb-greek-sym  { font-size: 11px; color: var(--text-2); flex-shrink: 0; }
+.pb-greek-val  { font-size: 12px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+/* Center payoff panel */
+.pb-kpi-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.pb-kpi-item  { padding: 12px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.pb-kpi-item:last-child { border-right: none; }
+.pb-kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-2); margin-bottom: 4px; line-height: 1.3; }
+.pb-kpi-val   { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.25; white-space: nowrap; }
+.pb-kpi-val.profit { color: var(--profit); }
+.pb-kpi-val.loss   { color: var(--loss); }
+.pb-kpi-val.accent { color: var(--accent); }
+.pb-kpi-sub   { font-size: 10.5px; color: var(--text-2); margin-top: 2px; }
+/* Table | Chart tabs */
+.pb-view-tabs { display: flex; gap: 2px; text-transform: none; letter-spacing: 0; }
+.pb-view-tab {
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 4px;
+    border: 1px solid transparent; background: none; color: var(--text-2); cursor: pointer;
+}
+.pb-view-tab.active { background: var(--bg2); border-color: var(--border); color: var(--text); }
+.pb-payoff-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pb-payoff-table th {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-2); padding: 7px 14px; text-align: right; border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+}
+.pb-payoff-table th:first-child, .pb-payoff-table td:first-child { text-align: left; }
+.pb-payoff-table td {
+    padding: 6px 14px; text-align: right; color: var(--text); font-weight: 600;
+    font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border);
+}
+.pb-payoff-table tr:last-child td { border-bottom: none; }
+.pb-payoff-table td.profit { color: var(--profit); }
+.pb-payoff-table td.loss   { color: var(--loss); }
+.pb-payoff-table td.dim    { color: var(--text-2); font-weight: 500; }
+.pb-payoff-table tr.spot-row td { background: var(--bg2); }
+.pb-payoff-table tr.spot-row td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.pb-chart-area { flex: 1; display: flex; flex-direction: column; }
+.pb-chart-canvas { display: block; width: 100%; flex: 1; min-height: 220px; }
+.pb-chart-legend { display: flex; gap: 14px; align-items: center; padding: 6px 14px; border-top: 1px solid var(--border); }
+.pb-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-2); }
+.pb-legend-line { width: 16px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+/* Right orders panel */
+.pb-order-leg { display: grid; grid-template-columns: 1fr auto; align-items: start; padding: 9px 14px; border-bottom: 1px solid var(--border); gap: 8px; }
+.pb-order-leg:last-child { border-bottom: none; }
+.pb-order-sym  { font-size: 12px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
+.pb-order-meta { font-size: 11px; color: var(--text-2); }
+.pb-order-side { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 3px; }
+.pb-order-side.sell { background: rgba(var(--loss-rgb, 248,113,113), 0.15); color: var(--loss); }
+.pb-order-side.buy  { background: rgba(var(--profit-rgb, 34,197,94), 0.15); color: var(--profit); }
+/* Legacy stat classes kept for compat */
 .pb-stat-block { display: flex; flex-direction: column; gap: 4px; }
 .pb-stat-label { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
 .pb-stat-val   { font-size: 13px; font-weight: 700; color: var(--text); }
 .pb-stat-sub   { font-size: 11px; color: var(--text-2); }
-.pb-order-table { width: 100%; border-collapse: collapse; font-size: 12px; grid-column: 1/-1; }
-.pb-order-table th { font-size: 9.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border); }
-.pb-order-table td { padding: 5px 8px; color: var(--text-2); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border); }
-.pb-order-table tr:last-child td { border-bottom: none; }
-.pb-order-table .t-sell { color: var(--loss); font-weight: 700; }
-.pb-order-table .t-buy  { color: var(--profit); font-weight: 700; }
 
 .pb-actions {
     display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px;
@@ -341,6 +405,50 @@
 .pb-action-result { font-size: 12px; font-weight: 600; }
 .pb-action-result.ok  { color: var(--profit); }
 .pb-action-result.err { color: var(--loss); }
+
+/* ── Payoff analysis ─────────────────────────────────────────────────── */
+.pb-payoff-wrap { display: flex; flex-direction: column; gap: 12px; grid-column: 1/-1; }
+
+.pb-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+.pb-kpi-item {
+    padding: 11px 13px;
+    display: flex; flex-direction: column; gap: 3px;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+}
+.pb-kpi-item:last-child { border-right: none; }
+.pb-kpi-label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-3);
+}
+.pb-kpi-val {
+    font-size: 14px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.pb-kpi-val.profit { color: var(--profit); }
+.pb-kpi-val.loss   { color: var(--loss); }
+.pb-kpi-val.accent { color: var(--accent); }
+.pb-kpi-sub { font-size: 10px; color: var(--text-3); }
+
+.pb-chart-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg);
+}
+.pb-chart-canvas { display: block; width: 100%; height: 168px; }
+.pb-chart-legend {
+    display: flex; gap: 16px; align-items: center;
+    padding: 6px 14px; border-top: 1px solid var(--border);
+}
+.pb-legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-2); }
+.pb-legend-line  { width: 18px; height: 2px; border-radius: 1px; flex-shrink: 0; }
 </style>
 
 <!-- Page header -->
@@ -621,7 +729,7 @@
     <!-- Pre-execution stats panel -->
     <div class="pb-precheck-panel" id="pb-precheck-panel" hidden>
         <div class="pb-section-title" style="margin-top:0;">Pre-execution</div>
-        <div class="pb-precheck-grid" id="pb-precheck-content">
+        <div id="pb-precheck-content">
             <div class="pb-precheck-loading" id="pb-precheck-loading">Fetching stats...</div>
         </div>
     </div>
@@ -1350,72 +1458,305 @@ async function pbRunPrecheck() {
         const d = await r.json();
         if (!r.ok) { content.innerHTML = `<div class="pb-precheck-loading" style="color:var(--loss)">${d.error || 'Error'}</div>`; return; }
         content.innerHTML = _pbRenderPrecheck(d);
+        _pbLastPayoff = d.payoff ? { payoff: d.payoff, spot: d.spot } : null;
     } catch(e) {
         content.innerHTML = '<div class="pb-precheck-loading" style="color:var(--loss)">Could not fetch stats.</div>';
     }
 }
 
+let _pbLastPayoff = null;
+function _pbSetPayoffView(view) {
+    document.querySelectorAll('.pb-view-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    document.getElementById('pb-payoff-view-table').hidden = view !== 'table';
+    document.getElementById('pb-payoff-view-chart').hidden = view !== 'chart';
+    if (view === 'chart' && _pbLastPayoff) _pbDrawPayoffChart(_pbLastPayoff.payoff, _pbLastPayoff.spot);
+}
+
+function _pbDrawPayoffChart(payoff, spot) {
+    const canvas = document.getElementById('pb-payoff-canvas');
+    if (!canvas || !payoff?.scenarios?.length) return;
+    const ctx = canvas.getContext('2d');
+
+    // High-DPI sizing — canvas fills flex parent; clientHeight may be 0 on first paint
+    const W = canvas.clientWidth || 560, H = Math.max(canvas.clientHeight, 180);
+    canvas.width = W * devicePixelRatio; canvas.height = H * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+
+    const PAD = { t: 12, r: 16, b: 28, l: 58 };
+    const cW = W - PAD.l - PAD.r, cH = H - PAD.t - PAD.b;
+
+    const scenarios = payoff.scenarios;
+    const spots    = scenarios.map(s => s.spot);
+    const expiry   = scenarios.map(s => s.pnl_expiry);
+    const today    = scenarios.map(s => s.pnl_target);
+    const allPnl   = [...expiry, ...today];
+    const pnlMin   = Math.min(...allPnl), pnlMax = Math.max(...allPnl);
+    const pnlRange = pnlMax - pnlMin || 1;
+    const spotMin  = spots[0], spotMax = spots[spots.length - 1], spotRange = spotMax - spotMin || 1;
+
+    const xOf = s => PAD.l + ((s - spotMin) / spotRange) * cW;
+    const yOf = p => PAD.t + (1 - (p - pnlMin) / pnlRange) * cH;
+    const y0  = yOf(0);
+
+    // CSS token helper
+    const cs = getComputedStyle(document.documentElement);
+    const tok = n => cs.getPropertyValue(n).trim();
+    const cAccent = tok('--accent') || '#4d8ef0';
+    const cProfit = tok('--profit') || '#22c55e';
+    const cLoss   = tok('--loss')   || '#f87171';
+    const cBorder = tok('--border') || '#2a2f3d';
+    const cText3  = tok('--text-3') || '#475569';
+    const cText2  = tok('--text-2') || '#94a3b8';
+
+    // Grid & axes
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = cBorder; ctx.lineWidth = 1;
+
+    // Horizontal grid + Y labels
+    const yTicks = 4;
+    for (let i = 0; i <= yTicks; i++) {
+        const p  = pnlMin + (pnlMax - pnlMin) * i / yTicks;
+        const y  = yOf(p);
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(PAD.l + cW, y); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = cText3; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
+        const abs = Math.abs(p), sign = p >= 0 ? '+' : '−';
+        const lbl = abs >= 100000 ? sign + (abs/100000).toFixed(1)+'L' :
+                    abs >= 1000   ? sign + (abs/1000).toFixed(0)+'K'   :
+                    sign + abs.toFixed(0);
+        ctx.fillText(lbl, PAD.l - 5, y + 3);
+    }
+
+    // Zero line
+    ctx.strokeStyle = cBorder; ctx.lineWidth = 1; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.moveTo(PAD.l, y0); ctx.lineTo(PAD.l + cW, y0); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Fill expiry profit/loss
+    const drawFill = (vals, col) => {
+        ctx.fillStyle = col; ctx.globalAlpha = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(xOf(spots[0]), y0);
+        vals.forEach((p, i) => ctx.lineTo(xOf(spots[i]), yOf(p)));
+        ctx.lineTo(xOf(spots[vals.length-1]), y0);
+        ctx.closePath(); ctx.fill();
+    };
+    // Profit fill (p > 0 zones)
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD.l, PAD.t, cW, Math.max(y0 - PAD.t, 0));
+    ctx.clip(); drawFill(expiry, cProfit); ctx.restore();
+    // Loss fill (p < 0 zones)
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD.l, y0, cW, cH - (y0 - PAD.t));
+    ctx.clip(); drawFill(expiry, cLoss); ctx.restore();
+
+    // Today line (dashed gray)
+    ctx.strokeStyle = cText2; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    today.forEach((p, i) => i === 0 ? ctx.moveTo(xOf(spots[i]), yOf(p)) : ctx.lineTo(xOf(spots[i]), yOf(p)));
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // Expiry line (solid accent)
+    ctx.strokeStyle = cAccent; ctx.lineWidth = 2; ctx.globalAlpha = 1;
+    ctx.beginPath();
+    expiry.forEach((p, i) => i === 0 ? ctx.moveTo(xOf(spots[i]), yOf(p)) : ctx.lineTo(xOf(spots[i]), yOf(p)));
+    ctx.stroke();
+
+    // Current spot dotted line
+    const xs = xOf(spot);
+    ctx.strokeStyle = cText3; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.moveTo(xs, PAD.t); ctx.lineTo(xs, PAD.t + cH); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+    // Breakeven markers
+    (payoff.breakevens?.expiry?.levels || []).forEach(be => {
+        const xb = xOf(be);
+        ctx.fillStyle = cText2; ctx.font = 'bold 8.5px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('BE', xb, PAD.t + cH + 18);
+        ctx.strokeStyle = cText2; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
+        ctx.beginPath(); ctx.moveTo(xb, PAD.t); ctx.lineTo(xb, PAD.t + cH + 6); ctx.stroke();
+        ctx.globalAlpha = 1;
+    });
+
+    // X-axis spot labels (5 ticks)
+    ctx.fillStyle = cText3; ctx.font = '9px system-ui'; ctx.textAlign = 'center'; ctx.globalAlpha = 1;
+    for (let i = 0; i <= 4; i++) {
+        const s = spotMin + spotRange * i / 4;
+        ctx.fillText(Math.round(s).toLocaleString('en-IN'), xOf(s), PAD.t + cH + 12);
+    }
+}
+
 function _pbRenderPrecheck(d) {
-    const fmt = v => v != null ? '&#8377;' + v.toLocaleString('en-IN', {maximumFractionDigits:2}) : '—';
+    const fmt  = v => v != null ? '&#8377;' + v.toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
+    const fmt2 = v => v != null ? '&#8377;' + v.toLocaleString('en-IN', {maximumFractionDigits:2}) : '—';
     const fmtN = (v, dec=2) => v != null ? v.toFixed(dec) : '—';
 
-    // Order book table
-    const rows = (d.legs || []).map(l => `
-        <tr>
-            <td>${l.tradingsymbol}</td>
-            <td class="${l.side==='SELL'?'t-sell':'t-buy'}">${l.side}</td>
-            <td>${l.qty}</td>
-            <td>&#8377;${l.price.toFixed(2)}</td>
-            <td>&#8377;${(l.price * l.qty).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
-        </tr>`).join('');
-    const orderTable = `
-        <div style="grid-column:1/-1;">
-            <div class="pb-stat-label" style="margin-bottom:6px;">Order Book</div>
-            <table class="pb-order-table">
-                <thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Value</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        </div>`;
-
-    // Charges
+    // ── LEFT PANEL: Details ──────────────────────────────────────────
     const ch = d.charges || {};
-    const chargesBlock = `
-        <div class="pb-stat-block">
-            <div class="pb-stat-label">Charges</div>
-            <div class="pb-stat-val">${fmt(ch.total)}</div>
-            <div class="pb-stat-sub">Brokerage ${fmt(ch.brokerage)} &bull; STT ${fmt(ch.stt)} &bull; Exch ${fmt(ch.exchange)} &bull; GST ${fmt(ch.gst)}</div>
-        </div>`;
-
-    // Margin
-    const marginBlock = `
-        <div class="pb-stat-block">
-            <div class="pb-stat-label">Margin Required</div>
-            <div class="pb-stat-val">${d.margin_required != null ? fmt(d.margin_required) : 'Login required'}</div>
-        </div>
-        <div class="pb-stat-block">
-            <div class="pb-stat-label">Margin Available</div>
-            <div class="pb-stat-val">${d.margin_available != null ? fmt(d.margin_available) : '—'}</div>
-        </div>`;
-
-    // Greeks aggregate
     const ag = d.greeks?.aggregate || {};
-    const greeksBlock = `
-        <div class="pb-stat-block">
-            <div class="pb-stat-label">Greeks (position)</div>
-            <div class="pb-stat-val" style="font-size:12px;">
-                &Delta; ${fmtN(ag.delta)} &nbsp; &Gamma; ${fmtN(ag.gamma,5)} &nbsp; &Theta; ${fmtN(ag.theta)} &nbsp; &nu; ${fmtN(ag.vega)}
+    const mrCls = d.margin_required != null ? '' : 'muted';
+    const maCls = d.margin_available != null ? (d.margin_available > (d.margin_required||0) ? 'profit' : 'loss') : 'muted';
+
+    const leftPanel = `
+    <div class="pb-panel">
+        <div class="pb-panel-head">Position Details</div>
+        <div class="pb-detail-row">
+            <span class="pb-detail-label">Margin Required</span>
+            <span class="pb-detail-val ${mrCls}">${d.margin_required != null ? fmt(d.margin_required) : 'Login req.'}</span>
+        </div>
+        <div class="pb-detail-row">
+            <span class="pb-detail-label">Margin Available</span>
+            <span class="pb-detail-val ${maCls}">${d.margin_available != null ? fmt(d.margin_available) : '—'}</span>
+        </div>
+        <div class="pb-detail-row">
+            <span class="pb-detail-label">Charges</span>
+            <span class="pb-detail-val">${fmt2(ch.total)}</span>
+        </div>
+        <div class="pb-detail-sub">Brokerage ${fmt2(ch.brokerage)} &middot; STT ${fmt2(ch.stt)} &middot; Exch ${fmt2(ch.exchange)} &middot; GST ${fmt2(ch.gst)}</div>
+        <div class="pb-greeks-grid">
+            <div class="pb-greek-item"><span class="pb-greek-sym">Delta &Delta;</span><span class="pb-greek-val">${fmtN(ag.delta)}</span></div>
+            <div class="pb-greek-item"><span class="pb-greek-sym">Gamma &Gamma;</span><span class="pb-greek-val">${fmtN(ag.gamma,5)}</span></div>
+            <div class="pb-greek-item"><span class="pb-greek-sym">Theta &Theta;</span><span class="pb-greek-val">${fmtN(ag.theta)}</span></div>
+            <div class="pb-greek-item"><span class="pb-greek-sym">Vega V</span><span class="pb-greek-val">${fmtN(ag.vega)}</span></div>
+        </div>
+        <div class="pb-detail-row">
+            <span class="pb-detail-label">DTE</span>
+            <span class="pb-detail-val">${d.dte != null ? d.dte + 'd' : '—'}</span>
+        </div>
+        <div class="pb-detail-row" style="border-bottom:none;">
+            <span class="pb-detail-label">Spot &middot; Lot</span>
+            <span class="pb-detail-val muted">${d.spot != null ? d.spot.toLocaleString('en-IN',{maximumFractionDigits:0}) : '—'} &middot; ${d.lot_size || '—'}</span>
+        </div>
+    </div>`;
+
+    // ── CENTER PANEL: Payoff ─────────────────────────────────────────
+    const pw = d.payoff;
+    let centerPanel = `<div class="pb-panel"><div class="pb-panel-head">Payoff Analysis</div><div style="padding:24px;color:var(--text-3);font-size:11px;">No payoff data</div></div>`;
+    if (pw) {
+        const fmtPnl = v => {
+            if (v == null) return '<span style="color:var(--text-2);font-weight:500;">Unlimited</span>';
+            const abs = Math.abs(v), sign = v >= 0 ? '+' : '−';
+            const str = abs >= 100000 ? (abs/100000).toFixed(2)+'L' : abs >= 1000 ? (abs/1000).toFixed(1)+'K' : abs.toFixed(0);
+            return `${sign}&#8377;${str}`;
+        };
+        const fmtSpot = v => Math.round(v).toLocaleString('en-IN');
+        const beLevels = pw.breakevens?.expiry?.levels || [];
+        const beText  = beLevels.length ? beLevels.map(fmtSpot).join(' · ') : '—';
+        const mpCls   = pw.max_profit != null ? (pw.max_profit >= 0 ? 'profit' : 'loss') : '';
+        const mlCls   = pw.max_loss   != null ? (pw.max_loss   < 0  ? 'loss'   : 'profit') : '';
+        const npCls   = pw.net_premium >= 0 ? 'profit' : 'loss';
+        const popCls  = pw.pop >= 50 ? 'profit' : (pw.pop >= 35 ? 'accent' : 'loss');
+
+        // Payoff table: 11 rows centred on spot (scenario index 30), every 3rd step (~1.2%)
+        const sc = pw.scenarios || [];
+        const mid = Math.floor(sc.length / 2);
+        const fmtRowPnl = v => {
+            const abs = Math.abs(v);
+            const str = abs >= 100000 ? (abs/100000).toFixed(2)+'L' : abs.toLocaleString('en-IN');
+            return (v < 0 ? '−' : '') + str;
+        };
+        const pnlCls = v => v > 0 ? 'profit' : (v < 0 ? 'loss' : 'dim');
+        const tableRows = [];
+        for (let i = mid - 15; i <= mid + 15; i += 3) {
+            const s = sc[i]; if (!s) continue;
+            const chg = ((s.spot - d.spot) / d.spot * 100);
+            tableRows.push(`
+            <tr class="${i === mid ? 'spot-row' : ''}">
+                <td>${fmtSpot(s.spot)} <span class="dim" style="color:var(--text-2);font-weight:500;">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span></td>
+                <td class="${pnlCls(s.pnl_target)}">${fmtRowPnl(s.pnl_target)}</td>
+                <td class="${pnlCls(s.pnl_expiry)}">${fmtRowPnl(s.pnl_expiry)}</td>
+            </tr>`);
+        }
+        const payoffTable = `
+        <table class="pb-payoff-table">
+            <thead><tr>
+                <th>Target</th>
+                <th>Today <span style="font-weight:500;text-transform:none;letter-spacing:0;">(${d.dte}d to expiry)</span></th>
+                <th>On Expiry</th>
+            </tr></thead>
+            <tbody>${tableRows.join('')}</tbody>
+        </table>`;
+
+        centerPanel = `
+        <div class="pb-panel">
+            <div class="pb-panel-head">
+                <span>Payoff Analysis</span>
+                <div class="pb-view-tabs">
+                    <button type="button" class="pb-view-tab active" data-view="table" onclick="_pbSetPayoffView('table')">Table</button>
+                    <button type="button" class="pb-view-tab" data-view="chart" onclick="_pbSetPayoffView('chart')">Chart</button>
+                </div>
+            </div>
+            <div class="pb-kpi-strip">
+                <div class="pb-kpi-item">
+                    <div class="pb-kpi-label">Max Profit</div>
+                    <div class="pb-kpi-val ${mpCls}">${fmtPnl(pw.max_profit)}</div>
+                    <div class="pb-kpi-sub">at expiry</div>
+                </div>
+                <div class="pb-kpi-item">
+                    <div class="pb-kpi-label">Max Loss</div>
+                    <div class="pb-kpi-val ${mlCls}">${fmtPnl(pw.max_loss)}</div>
+                    <div class="pb-kpi-sub">at expiry</div>
+                </div>
+                <div class="pb-kpi-item">
+                    <div class="pb-kpi-label">Breakevens</div>
+                    <div class="pb-kpi-val" style="font-size:12.5px;line-height:1.35;white-space:normal;">${beText}</div>
+                    <div class="pb-kpi-sub">${beLevels.length} level${beLevels.length !== 1 ? 's' : ''}</div>
+                </div>
+                <div class="pb-kpi-item">
+                    <div class="pb-kpi-label">Prob. of Profit</div>
+                    <div class="pb-kpi-val ${popCls}">${pw.pop != null ? pw.pop + '%' : '—'}</div>
+                    <div class="pb-kpi-sub">IV ${pw.atm_iv_pct ?? '—'}%</div>
+                </div>
+                <div class="pb-kpi-item">
+                    <div class="pb-kpi-label">Net Premium</div>
+                    <div class="pb-kpi-val ${npCls}">${fmtPnl(pw.net_premium)}</div>
+                    <div class="pb-kpi-sub">${pw.net_premium >= 0 ? 'collected' : 'paid'}</div>
+                </div>
+            </div>
+            <div id="pb-payoff-view-table">${payoffTable}</div>
+            <div class="pb-chart-area" id="pb-payoff-view-chart" hidden>
+                <canvas class="pb-chart-canvas" id="pb-payoff-canvas"></canvas>
+                <div class="pb-chart-legend">
+                    <div class="pb-legend-item">
+                        <div class="pb-legend-line" style="background:var(--accent);"></div>
+                        <span>At expiry</span>
+                    </div>
+                    <div class="pb-legend-item">
+                        <div class="pb-legend-line" style="background:var(--text-3);border-top:2px dashed var(--text-3);height:0;"></div>
+                        <span>Today (${d.dte}d)</span>
+                    </div>
+                    <span style="margin-left:auto;font-size:9.5px;color:var(--text-3);">Spot &#8377;${fmtSpot(d.spot)}</span>
+                </div>
             </div>
         </div>`;
+    }
 
-    // DTE
-    const dteBlock = `
-        <div class="pb-stat-block">
-            <div class="pb-stat-label">Days to Expiry</div>
-            <div class="pb-stat-val">${d.dte != null ? d.dte + ' days' : '—'}</div>
-            <div class="pb-stat-sub">Spot ${d.spot != null ? d.spot.toLocaleString('en-IN',{maximumFractionDigits:2}) : '—'} &bull; Lot ${d.lot_size || '—'}</div>
+    // ── RIGHT PANEL: Orders ──────────────────────────────────────────
+    const legs = (d.legs || []).map(l => {
+        const sideCls = l.side === 'SELL' ? 'sell' : 'buy';
+        const sym = l.tradingsymbol || '';
+        // Split "NIFTY26OCT24500CE" → "NIFTY" + "26OCT24500CE"
+        const symMatch = sym.match(/^([A-Z]+?)(\d.+)$/);
+        const symMain   = symMatch ? symMatch[1] : sym;
+        const symSuffix = symMatch ? symMatch[2] : '';
+        return `
+        <div class="pb-order-leg">
+            <div>
+                <div class="pb-order-sym">${symMain} <span style="color:var(--text-3);font-weight:500;">${symSuffix}</span></div>
+                <div class="pb-order-meta">${l.qty} qty &middot; &#8377;${l.price.toFixed(2)}</div>
+            </div>
+            <span class="pb-order-side ${sideCls}">${l.side}</span>
         </div>`;
+    }).join('');
 
-    return `<div class="pb-precheck-grid">${orderTable}${chargesBlock}${marginBlock}${greeksBlock}${dteBlock}</div>`;
+    const rightPanel = `
+    <div class="pb-panel">
+        <div class="pb-panel-head">Order Book</div>
+        ${legs || '<div style="padding:16px;color:var(--text-3);font-size:11px;">No legs</div>'}
+    </div>`;
+
+    return `<div class="pb-precheck-grid">${leftPanel}${centerPanel}${rightPanel}</div>`;
 }
 
 function pbReset() {

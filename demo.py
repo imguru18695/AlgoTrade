@@ -967,6 +967,14 @@ async def api_precheck(payload: dict = Body(...)):
         "total":     round(brokerage + stt + exchange + sebi + gst, 2),
     }
 
+    try:
+        target_days = int(payload.get("target_days", 0) or 0)
+    except (TypeError, ValueError):
+        target_days = 0
+    payoff  = _greeks.position_payoff(legs, spot, dte_days, r=r, target_days=target_days)
+    pcr     = _greeks.position_pcr(legs)
+    profile = _greeks.greeks_profile(agg)
+
     return JSONResponse({
         "legs": [
             {k: l[k] for k in ("tradingsymbol", "exchange", "side", "qty", "price", "strike", "opt_type")}
@@ -976,9 +984,12 @@ async def api_precheck(payload: dict = Body(...)):
         "margin_required":  None,   # requires live Kite token
         "margin_available": None,
         "greeks":           {"per_leg": leg_greeks, "aggregate": agg},
+        "profile":          profile,
+        "pcr":              pcr,
         "dte":              dte_days,
         "spot":             round(spot, 2),
         "lot_size":         lot_size,
+        "payoff":           payoff,
     })
 
 
