@@ -223,6 +223,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Convexity React dashboard (Vite build) — served under /app when the build exists.
+# Guarded + lazy import so it can never affect the live app's startup.
+import os as _os
+_APP_DIST = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "frontend", "dist")
+if _os.path.isdir(_APP_DIST):
+    app.mount("/app", StaticFiles(directory=_APP_DIST, html=True), name="app")
+
+
+@app.get("/api/dashboard")
+async def api_dashboard():
+    """Market dashboard snapshot (real-shaped, currently simulated)."""
+    from market import snapshot
+    return JSONResponse(snapshot.build_dashboard())
+
+
 app.include_router(auth_router)
 app.include_router(baskets_router)
 app.include_router(logs_router)
