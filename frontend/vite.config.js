@@ -5,8 +5,10 @@ import react from '@vitejs/plugin-react'
 // Production build emits to dist/ (FastAPI will serve it in a later step).
 export default defineConfig({
   plugins: [react()],
-  // Served by FastAPI (demo.py) under /app in production; assets resolve to /app/assets/*.
-  base: '/app/',
+  // Relative base so the same build works mounted at "/" (main.py, the live
+  // domain) or "/app" (demo.py) without a rebuild — asset URLs resolve relative
+  // to wherever index.html itself is served from.
+  base: './',
   server: {
     port: 5173,
     proxy: {

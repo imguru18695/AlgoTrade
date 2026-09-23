@@ -224,13 +224,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Convexity React dashboard (Vite build) — served under /app when the build exists.
-# Guarded + lazy import so it can never affect the live app's startup.
-import os as _os
-_APP_DIST = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "frontend", "dist")
-if _os.path.isdir(_APP_DIST):
-    app.mount("/app", StaticFiles(directory=_APP_DIST, html=True), name="app")
-
 
 @app.get("/api/dashboard")
 async def api_dashboard():
@@ -278,7 +271,7 @@ async def _page_context(request: Request) -> dict | None:
     }
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/live", response_class=HTMLResponse)
 async def dashboard(request: Request):
     ctx = await _page_context(request)
     if ctx is None:
@@ -362,3 +355,14 @@ async def get_pnl():
         }
 
     return JSONResponse({"total_pnl": total_pnl, "positions": positions_data, "baskets": baskets_data})
+
+
+# ── Convexity React dashboard (Vite build) — served at "/" ──────────────────
+# Registered LAST: Starlette matches mounts by prefix in registration order, so
+# a Mount("/") registered earlier would shadow every route above it (/live,
+# /management, /api/*, /auth/*, /baskets/*, etc). Guarded + directory check so
+# a missing build can never affect the live app's startup.
+import os as _os
+_APP_DIST = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "frontend", "dist")
+if _os.path.isdir(_APP_DIST):
+    app.mount("/", StaticFiles(directory=_APP_DIST, html=True), name="app")

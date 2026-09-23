@@ -61,7 +61,7 @@ async def callback(request: Request):
         logging.error(f"Login callback failed: {e}")
         return RedirectResponse(url="/auth/login", status_code=302)
 
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/live", status_code=302)
 
 
 @router.get("/logout")
