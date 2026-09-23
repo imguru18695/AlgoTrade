@@ -17,7 +17,8 @@ jobs:
           timeout: 60s
           script: |
             cd ~/algoplatform
-            git pull
+            git fetch origin main
+            git reset --hard origin/main
             sudo systemctl restart algoplatform algoplatform-demo
             echo "✅ Deploy complete"
             sudo systemctl is-active algoplatform algoplatform-demo
