@@ -513,6 +513,17 @@ async def api_expiries():
     return JSONResponse({"expiries": _get_expiries()})
 
 
+@app.get("/api/dashboard")
+async def api_dashboard():
+    """Market dashboard snapshot — per-index price/technicals/derivatives.
+
+    Real-shaped, currently simulated (see market/snapshot.py). Swapping to live
+    NSE/Kite data later keeps this response shape unchanged.
+    """
+    from market import snapshot
+    return JSONResponse(snapshot.build_dashboard())
+
+
 @app.get("/api/chain/{symbol}")
 async def api_chain(symbol: str, expiry: Optional[str] = None):
     symbol = symbol.upper()
