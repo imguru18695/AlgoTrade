@@ -337,6 +337,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Convexity React dashboard (Vite build). Served under /app when the build exists.
+import os as _os
+_APP_DIST = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "frontend", "dist")
+if _os.path.isdir(_APP_DIST):
+    app.mount("/app", StaticFiles(directory=_APP_DIST, html=True), name="app")
+
 _env = Environment(
     loader=FileSystemLoader("templates"),
     autoescape=select_autoescape(["html"]),

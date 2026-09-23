@@ -143,6 +143,19 @@ def pcr(chain_strikes: list[dict]) -> float | None:
     return round(pe / ce, 2) if ce else None
 
 
+def ma_above_count(closes: list[float], periods: list[int]) -> int:
+    """How many of the given SMAs the latest price sits above."""
+    spot = closes[-1]
+    return sum(1 for p in periods if (sma(closes, p) or 0) <= spot)
+
+
+def support_resistance(highs: list[float], lows: list[float], window: int = 20) -> tuple[float, float]:
+    """Nearest support/resistance from recent swing low/high."""
+    lo = min(lows[-window:]) if lows else 0.0
+    hi = max(highs[-window:]) if highs else 0.0
+    return lo, hi
+
+
 def max_pain(chain_strikes: list[dict]) -> float | None:
     """Strike that minimises total option-writer payout at expiry."""
     if not chain_strikes:
