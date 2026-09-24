@@ -2,21 +2,32 @@
 Dashboard snapshot builder.
 
 Produces the per-index contract the Convexity dashboard consumes plus the
-market-intelligence rail (FII/DII flows, sectors, breadth). Data is REAL-SHAPED
-but SIMULATED for now — a deterministic mean-reverting daily OHLCV series (seeded
-by index + date) feeds market.indicators, and a simulated chain feeds derivatives.
+market-intelligence rail (FII/DII flows, sectors, breadth).
 
-Live swap later replaces `_daily_series`/`_chain` (→ Kite historical / NSELive)
-and the `_flows`/`_sectors` stubs (→ NSE EOD reports / sector-index quotes);
-the response shape, and therefore the frontend, does not change.
+LIVE where connected: pass an authenticated `kite` client to build_dashboard()
+and NIFTY/SENSEX/BANKNIFTY/INDIA VIX spot + daily history (feeding every
+technical: last5, 52W, EMA/RSI/MACD/OBV/A-D/Stochastic) come from Kite
+(market/live.py) — Kite covers both NSE and BSE in one session, so it is the
+single source for both indices. Each index falls back to its own simulated
+series independently if the live call fails, so a Kite hiccup degrades one
+card, never the page. `kite=None` (e.g. demo.py, no active session) is fully
+simulated, unchanged from before.
+
+STILL SIMULATED regardless of `kite`: option chain / PCR / max-pain / OI
+(`_chain`), FII/DII flows, sectors, and globals — separate connections, not
+yet wired. The response shape does not change either way, so the frontend
+never needs to know which parts are live.
 """
 from __future__ import annotations
 
+import logging
 import math
 import random
 from datetime import date, datetime, timedelta, timezone
 
 from market import indicators as ind
+
+log = logging.getLogger("market.snapshot")
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -26,6 +37,21 @@ _INDICES = {
 }
 _TICKER_EXTRA = {"BANKNIFTY": {"base": 53180.0}, "INDIA VIX": {"base": 14.38}}
 _MA_PERIODS = list(range(5, 101, 5))   # 20 SMAs: 5,10,…,100
+
+
+def _live_or_simulated_series(key: str, cfg: dict, kite) -> tuple[dict, str]:
+    """Daily OHLCV series for one index: live via Kite if a session is passed
+    and the fetch succeeds, else the deterministic simulated series."""
+    if kite is not None:
+        try:
+            from market import live as mlive
+            hist = mlive.fetch_daily_history(kite, key)
+        except Exception as e:
+            log.warning(f"market.snapshot: live history import/call for {key} failed: {e}")
+            hist = None
+        if hist:
+            return hist, "live"
+    return _daily_series(key, cfg["base"]), "simulated"
 
 
 # ── simulated series & chain ────────────────────────────────────────────────────
@@ -136,12 +162,19 @@ def _next_expiry(weekly):
 
 # ── per-index block ─────────────────────────────────────────────────────────────
 
-def _index_block(key, cfg):
-    s = _daily_series(key, cfg["base"])
+def _index_block(key, cfg, kite=None, live_quote=None):
+    s, source = _live_or_simulated_series(key, cfg, kite)
     closes, highs, lows, vols = s["close"], s["high"], s["low"], s["vol"]
     step = cfg["step"]
+
+    # Series-derived spot/change (always available); a pre-fetched live quote
+    # — when a session is active — overrides both with the real-time figure,
+    # since it reflects intraday movement the last daily bar alone would not.
     spot = closes[-1]
     chg = (closes[-1] - closes[-2]) / closes[-2] * 100
+    if live_quote:
+        spot, chg = live_quote["spot"], live_quote["chg_pct"]
+
     last5 = [round((closes[-i] - closes[-i - 1]) / closes[-i - 1] * 100, 2) for i in range(1, 6)]
 
     ema20, ema50 = ind.ema(closes, 20), ind.ema(closes, 50)
@@ -180,6 +213,7 @@ def _index_block(key, cfg):
 
     return {
         "key": key, "name": cfg["name"], "exchange": cfg["exchange"],
+        "data_source": source,
         "value": round(spot, 2), "chg_pct": round(chg, 2), "last5": last5,
         "hist_insight": _sessions_insight(last5),
         "w52": _w52(closes, spot),
@@ -244,16 +278,40 @@ def _market_status():
             "as_of": now.strftime("%d %b %H:%M IST")}
 
 
-def build_dashboard() -> dict:
-    indices = [_index_block(k, c) for k, c in _INDICES.items()]
+def build_dashboard(kite=None) -> dict:
+    """Build the dashboard snapshot. Pass an authenticated Kite client to
+    fetch NIFTY/SENSEX/BANKNIFTY/INDIA VIX live; omit (or pass None, e.g. no
+    active session) for the fully simulated snapshot — same response shape
+    either way. Every Kite call in here is BLOCKING; callers on an event loop
+    (main.py) MUST invoke this via asyncio.to_thread()."""
+    # One batched quote call covers every ticker (index cards + ticker-only
+    # symbols) — cheaper and avoids the cache-thrashing of N separate calls.
+    live_quotes = {}
+    if kite is not None:
+        from market import live as mlive
+        live_quotes = mlive.fetch_quotes(kite, ["NIFTY", "SENSEX", "BANKNIFTY", "INDIA VIX"])
+
+    indices = [_index_block(k, c, kite, live_quotes.get(k)) for k, c in _INDICES.items()]
     ticker = []
     for b in indices:
         ticker.append({"sym": "NIFTY" if b["key"] == "NIFTY" else b["name"],
                        "value": b["value"], "chg_pct": b["chg_pct"]})
-    bnf = _daily_series("BANKNIFTY", _TICKER_EXTRA["BANKNIFTY"]["base"])["close"]
-    ticker.insert(2, {"sym": "BANKNIFTY", "value": round(bnf[-1], 2),
-                      "chg_pct": round((bnf[-1] - bnf[-2]) / bnf[-2] * 100, 2)})
-    ticker.append({"sym": "INDIA VIX", "value": _TICKER_EXTRA["INDIA VIX"]["base"], "chg_pct": 2.1})
+
+    # BANKNIFTY + INDIA VIX are ticker-only (no technicals card) — live quote
+    # when available, simulated fallback otherwise.
+    if "BANKNIFTY" in live_quotes:
+        bnf_val, bnf_chg = live_quotes["BANKNIFTY"]["spot"], live_quotes["BANKNIFTY"]["chg_pct"]
+    else:
+        bnf_series = _daily_series("BANKNIFTY", _TICKER_EXTRA["BANKNIFTY"]["base"])["close"]
+        bnf_val = round(bnf_series[-1], 2)
+        bnf_chg = round((bnf_series[-1] - bnf_series[-2]) / bnf_series[-2] * 100, 2)
+    if "INDIA VIX" in live_quotes:
+        vix_val, vix_chg = live_quotes["INDIA VIX"]["spot"], live_quotes["INDIA VIX"]["chg_pct"]
+    else:
+        vix_val, vix_chg = _TICKER_EXTRA["INDIA VIX"]["base"], 2.1
+
+    ticker.insert(2, {"sym": "BANKNIFTY", "value": bnf_val, "chg_pct": bnf_chg})
+    ticker.append({"sym": "INDIA VIX", "value": vix_val, "chg_pct": vix_chg})
     return {
         "as_of": datetime.now(IST).isoformat(timespec="seconds"),
         "market_status": _market_status(),

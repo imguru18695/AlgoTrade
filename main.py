@@ -227,9 +227,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/api/dashboard")
 async def api_dashboard():
-    """Market dashboard snapshot (real-shaped, currently simulated)."""
+    """Market dashboard snapshot — NIFTY/SENSEX/BANKNIFTY/INDIA VIX are live
+    via Kite when a session is active, simulated otherwise (same shape either
+    way). build_dashboard() makes blocking Kite HTTP calls, so it runs off the
+    event loop — same convention as _refresh_cache — to avoid stalling the RM
+    engine and other requests for the duration of those calls."""
     from market import snapshot
-    return JSONResponse(snapshot.build_dashboard())
+    kite = get_kite() if load_token() else None
+    data = await asyncio.to_thread(snapshot.build_dashboard, kite)
+    return JSONResponse(data)
 
 
 app.include_router(auth_router)
