@@ -225,6 +225,13 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+@app.get("/api/session")
+async def api_session():
+    """Whether a Kite session is currently active — lets the public React
+    dashboard show Login/Logout correctly without guessing from data shape."""
+    return JSONResponse({"logged_in": bool(load_token())})
+
+
 @app.get("/api/dashboard")
 async def api_dashboard():
     """Market dashboard snapshot — NIFTY/SENSEX/BANKNIFTY/INDIA VIX are live
