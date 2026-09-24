@@ -16,7 +16,14 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
+
+# EC2 runs in UTC (confirmed via `timedatectl`), not IST — date.today() would
+# be a full calendar day behind IST during IST's 00:00-05:30 window (UTC
+# 18:30-23:59 the previous day), silently fetching Kite history one day
+# stale for anyone checking the dashboard in the evening/night. Always derive
+# "today" from IST explicitly, never from the server's local clock.
+IST = timezone(timedelta(hours=5, minutes=30))
 
 log = logging.getLogger("market.live")
 
@@ -133,7 +140,7 @@ def fetch_daily_history(kite, key: str, days: int = 260) -> dict | None:
     if not token:
         return None
 
-    to_d = date.today()
+    to_d = datetime.now(IST).date()
     from_d = to_d - timedelta(days=int(days * 1.6))   # pad for weekends/holidays
     try:
         bars = kite.historical_data(token, from_d, to_d, "day")

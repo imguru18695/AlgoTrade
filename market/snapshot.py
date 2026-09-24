@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import math
 import random
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from market import indicators as ind
 
@@ -57,7 +57,7 @@ def _live_or_simulated_series(key: str, cfg: dict, kite) -> tuple[dict, str]:
 # ── simulated series & chain ────────────────────────────────────────────────────
 
 def _daily_series(key: str, base: float, days: int = 260) -> dict:
-    rng = random.Random(f"{key}-{date.today().isoformat()}")
+    rng = random.Random(f"{key}-{datetime.now(IST).date().isoformat()}")
     theta, sig = 0.015, 0.008
     frac = [1.0]
     for _ in range(days - 1):
@@ -73,7 +73,7 @@ def _daily_series(key: str, base: float, days: int = 260) -> dict:
 
 
 def _chain(key: str, step: int, spot: float) -> list[dict]:
-    rng = random.Random(f"{key}-chain-{date.today().isoformat()}")
+    rng = random.Random(f"{key}-chain-{datetime.now(IST).date().isoformat()}")
     atm = round(spot / step) * step
     strikes = []
     for i in range(-10, 11):
@@ -151,7 +151,7 @@ def _sessions_insight(last5):
 
 
 def _next_expiry(weekly):
-    d = date.today()
+    d = datetime.now(IST).date()
     if weekly:
         while d.weekday() != 1: d += timedelta(days=1)
     else:
@@ -261,7 +261,7 @@ def _index_block(key, cfg, kite=None, live_quote=None):
 # ── market-intelligence rail (simulated) ────────────────────────────────────────
 
 def _flows():
-    rng = random.Random(f"flows-{date.today().isoformat()}")
+    rng = random.Random(f"flows-{datetime.now(IST).date().isoformat()}")
     fii = round(rng.uniform(-2500, 3000), 2)
     dii = round(rng.uniform(-1500, 2000), 2)
     adv = rng.randint(900, 1500); dec = rng.randint(600, 1200)
@@ -270,7 +270,7 @@ def _flows():
 
 
 def _globals():
-    rng = random.Random(f"globals-{date.today().isoformat()}")
+    rng = random.Random(f"globals-{datetime.now(IST).date().isoformat()}")
     defs = [("Gold", "$/oz", 2650.0), ("Silver", "$/oz", 30.80),
             ("Crude (Brent)", "$/bbl", 78.00), ("US 10Y", "%", 4.28)]
     out = []
@@ -281,7 +281,7 @@ def _globals():
 
 
 def _sectors():
-    rng = random.Random(f"sectors-{date.today().isoformat()}")
+    rng = random.Random(f"sectors-{datetime.now(IST).date().isoformat()}")
     names = ["Nifty IT", "Nifty Bank", "Nifty Auto", "Nifty FMCG", "Nifty Pharma", "Nifty Energy"]
     out = [{"name": nm, "chg": round(rng.uniform(-1.5, 2.0), 2)} for nm in names]
     return sorted(out, key=lambda x: -x["chg"])
