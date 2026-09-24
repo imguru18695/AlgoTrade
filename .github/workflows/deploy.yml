@@ -19,6 +19,7 @@ jobs:
             cd ~/algoplatform
             git fetch origin main
             git reset --hard origin/main
+            venv/bin/pip install -q -r requirements.txt
             sudo systemctl restart algoplatform algoplatform-demo
             echo "✅ Deploy complete"
             sudo systemctl is-active algoplatform algoplatform-demo

@@ -183,12 +183,22 @@ def _index_block(key, cfg, kite=None, live_quote=None):
         # kite's presence signals "live mode" (main.py, a session is active) —
         # jugaad itself needs no credentials, but gating on it keeps demo.py
         # (kite=None) fully offline/simulated, unchanged from before.
+        # Jugaad is PRIMARY (keeps Kite's budget light) but if it fails for
+        # any reason, fall back to Kite's live quote — NOT silently down to
+        # `closes[-1]` (the daily historical bar, cached up to 5 min and not
+        # a live tick at all). That silent fallback was the actual bug behind
+        # NIFTY showing a stale, non-real-time value: jugaad-data was never
+        # in requirements.txt, so every call failed on the server, 100% of
+        # the time, and NIFTY had no live fallback to catch it.
         from market import live_nse as mnse
         nse_spot = mnse.fetch_nifty_spot()
         if nse_spot:
             spot = nse_spot
             chg = (spot - closes[-2]) / closes[-2] * 100
             spot_source = "jugaad"
+        elif live_quote:
+            spot, chg = live_quote["spot"], live_quote["chg_pct"]
+            spot_source = "kite"
     elif live_quote:
         spot, chg = live_quote["spot"], live_quote["chg_pct"]
         spot_source = "kite"
@@ -302,16 +312,15 @@ def build_dashboard(kite=None) -> dict:
     active session) for the fully simulated snapshot — same response shape
     either way. Every Kite call in here is BLOCKING; callers on an event loop
     (main.py) MUST invoke this via asyncio.to_thread()."""
-    # One batched Kite quote call covers SENSEX + the ticker-only symbols.
-    # NIFTY is deliberately excluded — its spot comes from jugaad (NSE data
-    # off the Kite budget entirely; see _index_block) — and its Kite quote
-    # cost was already near-zero either way (Kite batches multiple symbols
-    # into one request), so removing it doesn't change the call count, only
-    # which values ride in the payload.
+    # One batched Kite quote call covers every ticker, NIFTY included. NIFTY's
+    # spot still prefers jugaad (NSE data off the Kite budget) — this Kite
+    # quote is its fallback for when jugaad fails, not its primary source —
+    # and including it costs nothing extra: Kite batches multiple symbols
+    # into one request either way.
     live_quotes = {}
     if kite is not None:
         from market import live as mlive
-        live_quotes = mlive.fetch_quotes(kite, ["SENSEX", "BANKNIFTY", "INDIA VIX"])
+        live_quotes = mlive.fetch_quotes(kite, ["NIFTY", "SENSEX", "BANKNIFTY", "INDIA VIX"])
 
     indices = [_index_block(k, c, kite, live_quotes.get(k)) for k, c in _INDICES.items()]
     ticker = []
