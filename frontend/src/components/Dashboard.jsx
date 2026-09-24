@@ -1,17 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchDashboard } from '../api.js'
 import Ticker from './Ticker.jsx'
 import IndexColumn from './IndexColumn.jsx'
 import RightRail from './RightRail.jsx'
 
+// Matches the backend's own quote-cache TTL (market/live.py, market/live_nse.py)
+// — polling faster than this would just re-read the same cached values.
+const REFRESH_MS = 15000
+
 export default function Dashboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const hasLoadedRef = useRef(false)
 
   useEffect(() => {
     let alive = true
-    fetchDashboard().then(d => { if (alive) setData(d) }).catch(e => { if (alive) setError(e.message) })
-    return () => { alive = false }
+    const load = () => fetchDashboard()
+      .then(d => {
+        if (!alive) return
+        setData(d)
+        setError(null)
+        hasLoadedRef.current = true
+      })
+      .catch(e => {
+        if (!alive) return
+        if (!hasLoadedRef.current) setError(e.message)
+        else console.warn('dashboard refresh failed, keeping last known data:', e.message)
+      })
+    load()
+    const id = setInterval(load, REFRESH_MS)
+    return () => { alive = false; clearInterval(id) }
   }, [])
 
   return (
