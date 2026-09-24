@@ -167,13 +167,31 @@ def _index_block(key, cfg, kite=None, live_quote=None):
     closes, highs, lows, vols = s["close"], s["high"], s["low"], s["vol"]
     step = cfg["step"]
 
-    # Series-derived spot/change (always available); a pre-fetched live quote
-    # — when a session is active — overrides both with the real-time figure,
-    # since it reflects intraday movement the last daily bar alone would not.
+    # Series-derived spot/change (always available); a live quote — when one
+    # resolves — overrides both with the real-time figure, since it reflects
+    # intraday movement the last daily bar alone would not. NIFTY's spot is
+    # NSE data, sourced from jugaad (nseindia.com) independent of Kite, so it
+    # never touches the Kite session's rate-limit budget; SENSEX (BSE, not
+    # covered by jugaad) uses the pre-fetched Kite quote as before. Either
+    # way, `closes[-2]` (yesterday's close) — from whichever series `source`
+    # resolved to above — is what the change percentage is measured against.
     spot = closes[-1]
     chg = (closes[-1] - closes[-2]) / closes[-2] * 100
-    if live_quote:
+    spot_source = "simulated" if source == "simulated" else "kite-series"
+
+    if key == "NIFTY" and kite is not None:
+        # kite's presence signals "live mode" (main.py, a session is active) —
+        # jugaad itself needs no credentials, but gating on it keeps demo.py
+        # (kite=None) fully offline/simulated, unchanged from before.
+        from market import live_nse as mnse
+        nse_spot = mnse.fetch_nifty_spot()
+        if nse_spot:
+            spot = nse_spot
+            chg = (spot - closes[-2]) / closes[-2] * 100
+            spot_source = "jugaad"
+    elif live_quote:
         spot, chg = live_quote["spot"], live_quote["chg_pct"]
+        spot_source = "kite"
 
     last5 = [round((closes[-i] - closes[-i - 1]) / closes[-i - 1] * 100, 2) for i in range(1, 6)]
 
@@ -213,7 +231,7 @@ def _index_block(key, cfg, kite=None, live_quote=None):
 
     return {
         "key": key, "name": cfg["name"], "exchange": cfg["exchange"],
-        "data_source": source,
+        "data_source": source, "spot_source": spot_source,
         "value": round(spot, 2), "chg_pct": round(chg, 2), "last5": last5,
         "hist_insight": _sessions_insight(last5),
         "w52": _w52(closes, spot),
@@ -284,12 +302,16 @@ def build_dashboard(kite=None) -> dict:
     active session) for the fully simulated snapshot — same response shape
     either way. Every Kite call in here is BLOCKING; callers on an event loop
     (main.py) MUST invoke this via asyncio.to_thread()."""
-    # One batched quote call covers every ticker (index cards + ticker-only
-    # symbols) — cheaper and avoids the cache-thrashing of N separate calls.
+    # One batched Kite quote call covers SENSEX + the ticker-only symbols.
+    # NIFTY is deliberately excluded — its spot comes from jugaad (NSE data
+    # off the Kite budget entirely; see _index_block) — and its Kite quote
+    # cost was already near-zero either way (Kite batches multiple symbols
+    # into one request), so removing it doesn't change the call count, only
+    # which values ride in the payload.
     live_quotes = {}
     if kite is not None:
         from market import live as mlive
-        live_quotes = mlive.fetch_quotes(kite, ["NIFTY", "SENSEX", "BANKNIFTY", "INDIA VIX"])
+        live_quotes = mlive.fetch_quotes(kite, ["SENSEX", "BANKNIFTY", "INDIA VIX"])
 
     indices = [_index_block(k, c, kite, live_quotes.get(k)) for k, c in _INDICES.items()]
     ticker = []
