@@ -253,6 +253,11 @@ app.include_router(execution_router)
 templates = Jinja2Templates(directory="templates")
 
 
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("home.html", {"request": request})
+
+
 async def _page_context(request: Request) -> dict | None:
     """Shared context builder for dashboard and management pages.
     Returns None and sets a redirect if auth fails."""
@@ -370,12 +375,13 @@ async def get_pnl():
     return JSONResponse({"total_pnl": total_pnl, "positions": positions_data, "baskets": baskets_data})
 
 
-# ── Convexity React dashboard (Vite build) — served at "/" ──────────────────
-# Registered LAST: Starlette matches mounts by prefix in registration order, so
-# a Mount("/") registered earlier would shadow every route above it (/live,
-# /management, /api/*, /auth/*, /baskets/*, etc). Guarded + directory check so
-# a missing build can never affect the live app's startup.
+# ── Convexity React dashboard (Vite build) — served at "/dashboard" ─────────
+# "/" is now the marketing landing page (see home() above); the React app
+# lives at /dashboard instead. Its own asset paths are relative (vite base:
+# "./") and its fetch calls are domain-absolute (/api/*), so it works
+# correctly mounted here without any rebuild. Guarded + directory check so a
+# missing build can never affect the live app's startup.
 import os as _os
 _APP_DIST = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "frontend", "dist")
 if _os.path.isdir(_APP_DIST):
-    app.mount("/", StaticFiles(directory=_APP_DIST, html=True), name="app")
+    app.mount("/dashboard", StaticFiles(directory=_APP_DIST, html=True), name="app")
