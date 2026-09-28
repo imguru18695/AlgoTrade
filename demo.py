@@ -514,6 +514,24 @@ async def management():
     return render("management.html", ctx)
 
 
+@app.get("/api/management")
+async def api_management():
+    """JSON twin of /management, for the React Management page — same
+    contract as main.py's /api/management, backed by this module's own
+    in-memory demo state instead of a real Kite session."""
+    ctx = _build_context()
+    return JSONResponse({
+        "positions":                ctx["positions"],
+        "unallocated":              ctx["unallocated"],
+        "baskets":                  ctx["baskets"],
+        "active_baskets_count":     ctx["active_baskets_count"],
+        "baskets_without_rm_count": ctx["baskets_without_rm_count"],
+        "total_pnl":                ctx["total_pnl"],
+        "user_id":                  ctx["user_id"],
+        "demo_mode":                ctx["demo_mode"],
+    })
+
+
 @app.get("/api/expiries")
 async def api_expiries():
     return JSONResponse({"expiries": _get_expiries()})

@@ -276,6 +276,30 @@ async def api_dashboard(request: Request):
     return JSONResponse(data)
 
 
+@app.get("/api/management")
+async def api_management(request: Request):
+    """Basket/position/RM control-panel snapshot — the JSON twin of the
+    /management Jinja page, for the React version. Reuses _page_context()
+    (the same cache-gathering the Jinja page and the RM engine already
+    depend on) so this can never fork or drift from that logic — it only
+    reads the already-existing caches. Explicit field whitelist rather than
+    JSONResponse(ctx) directly: ctx also carries the raw Request object,
+    which isn't JSON-serializable."""
+    ctx = await _page_context(request)
+    if ctx is None:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse({
+        "positions":                ctx["positions"],
+        "unallocated":              ctx["unallocated"],
+        "baskets":                  ctx["baskets"],
+        "active_baskets_count":     ctx["active_baskets_count"],
+        "baskets_without_rm_count": ctx["baskets_without_rm_count"],
+        "total_pnl":                ctx["total_pnl"],
+        "user_id":                  ctx["user_id"],
+        "demo_mode":                False,
+    })
+
+
 app.include_router(auth_router)
 app.include_router(baskets_router)
 app.include_router(logs_router)

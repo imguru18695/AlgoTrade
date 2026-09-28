@@ -8,11 +8,15 @@ const NAV = [
   { key: 'execution', label: 'Execution' },
 ]
 
-function NavItem({ icon, label, active, collapsed }) {
+// Only these have a real page behind them today — everything else in NAV
+// stays a plain, non-interactive label rather than a click that goes nowhere.
+const NAVIGABLE = new Set(['dashboard', 'management'])
+
+function NavItem({ icon, label, active, collapsed, onClick }) {
   return (
-    <div className="nav-item" title={collapsed ? label : undefined}
+    <div className="nav-item" title={collapsed ? label : undefined} onClick={onClick}
       style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 12,
-        padding: collapsed ? '11px 0' : '10px 12px', borderRadius: 7, cursor: 'pointer',
+        padding: collapsed ? '11px 0' : '10px 12px', borderRadius: 7, cursor: onClick ? 'pointer' : 'default',
         color: active ? 'var(--text)' : 'var(--muted)', background: active ? 'var(--teal-dim)' : 'transparent',
         boxShadow: active ? 'inset 0 0 0 1px rgba(45,212,191,.25)' : 'none', fontWeight: active ? 600 : 500 }}>
       <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -22,7 +26,7 @@ function NavItem({ icon, label, active, collapsed }) {
   )
 }
 
-export default function Sidebar({ collapsed, onToggle, active = 'dashboard', session = null }) {
+export default function Sidebar({ collapsed, onToggle, active = 'dashboard', session = null, onNavigate }) {
   // session === null means "unknown" (still loading, or this backend has no
   // login concept at all, e.g. demo.py) — keep the original display as-is
   // rather than guess. Only render Login/Logout once we actually know.
@@ -50,7 +54,8 @@ export default function Sidebar({ collapsed, onToggle, active = 'dashboard', ses
       </div>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {NAV.map(n => <NavItem key={n.key} icon={n.key} label={n.label} active={n.key === active} collapsed={collapsed} />)}
+        {NAV.map(n => <NavItem key={n.key} icon={n.key} label={n.label} active={n.key === active} collapsed={collapsed}
+          onClick={NAVIGABLE.has(n.key) ? () => onNavigate?.(n.key) : undefined} />)}
       </nav>
 
       <div style={{ marginTop: 'auto', padding: collapsed ? 0 : '0 4px' }}>

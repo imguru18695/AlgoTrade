@@ -4,6 +4,34 @@ export async function fetchDashboard() {
   return r.json()
 }
 
+export async function fetchManagement() {
+  const r = await fetch('/api/management')
+  if (!r.ok) throw new Error(`management ${r.status}`)
+  return r.json()
+}
+
+export async function fetchPnl() {
+  const r = await fetch('/pnl')
+  if (!r.ok) throw new Error(`pnl ${r.status}`)
+  return r.json()
+}
+
+// Every /baskets/* route is Form(...)-based and 302-redirects back to
+// /management on success. redirect:'manual' stops fetch from actually
+// following that redirect and rendering/discarding the full Jinja page on
+// every mutation — the caller re-fetches /api/management itself instead,
+// so nothing is lost by not following it.
+export async function postForm(url, fields = {}) {
+  const fd = new FormData()
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === undefined || v === null) continue
+    if (Array.isArray(v)) v.forEach(item => fd.append(k, item))
+    else fd.append(k, v)
+  }
+  const r = await fetch(url, { method: 'POST', body: fd, redirect: 'manual' })
+  if (r.type !== 'opaqueredirect' && !r.ok) throw new Error(`${url} ${r.status}`)
+}
+
 export async function fetchSession() {
   // Not every backend serving this build has a login concept (e.g. demo.py) —
   // treat any failure as "unknown" rather than surface an error.
