@@ -276,23 +276,30 @@ def build_dashboard(kite=None) -> dict:
     ticker = []
     for b in indices:
         ticker.append({"sym": "NIFTY" if b["key"] == "NIFTY" else b["name"],
-                       "value": b["value"], "chg_pct": b["chg_pct"]})
+                       "value": b["value"], "chg_pct": b["chg_pct"], "source": b["data_source"]})
 
     # BANKNIFTY + INDIA VIX are ticker-only (no technicals card) — live quote
-    # when available, simulated fallback otherwise.
+    # when available, simulated fallback otherwise. "source" here drives the
+    # frontend's TBC marker — same live/simulated distinction as data_source
+    # above, just not funneled through _index_block since these two have no
+    # card of their own.
     if "BANKNIFTY" in live_quotes:
         bnf_val, bnf_chg = live_quotes["BANKNIFTY"]["spot"], live_quotes["BANKNIFTY"]["chg_pct"]
+        bnf_source = "live"
     else:
         bnf_series = _daily_series("BANKNIFTY", _TICKER_EXTRA["BANKNIFTY"]["base"])["close"]
         bnf_val = round(bnf_series[-1], 2)
         bnf_chg = round((bnf_series[-1] - bnf_series[-2]) / bnf_series[-2] * 100, 2)
+        bnf_source = "simulated"
     if "INDIA VIX" in live_quotes:
         vix_val, vix_chg = live_quotes["INDIA VIX"]["spot"], live_quotes["INDIA VIX"]["chg_pct"]
+        vix_source = "live"
     else:
         vix_val, vix_chg = _TICKER_EXTRA["INDIA VIX"]["base"], 2.1
+        vix_source = "simulated"
 
-    ticker.insert(2, {"sym": "BANKNIFTY", "value": bnf_val, "chg_pct": bnf_chg})
-    ticker.append({"sym": "INDIA VIX", "value": vix_val, "chg_pct": vix_chg})
+    ticker.insert(2, {"sym": "BANKNIFTY", "value": bnf_val, "chg_pct": bnf_chg, "source": bnf_source})
+    ticker.append({"sym": "INDIA VIX", "value": vix_val, "chg_pct": vix_chg, "source": vix_source})
     return {
         "as_of": datetime.now(IST).isoformat(timespec="seconds"),
         "market_status": _market_status(),
