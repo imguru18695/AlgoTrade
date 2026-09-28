@@ -7,6 +7,15 @@ export const stateColor = s =>
     : /Bear|Fall|Distrib|Sell|Weak|Oversold|Overbought|Resistance/.test(s) ? 'var(--down)'
     : 'var(--amber)'
 export const cr = v => (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Cr'
+const _MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+// Formats a "YYYY-MM-DD" string by splitting it directly rather than going
+// through `new Date(iso)` — that parses as UTC midnight, and converting back
+// to the viewer's local time zone can silently shift the day by one.
+export const fmtDate = iso => {
+  if (!iso) return null
+  const [, m, d] = iso.split('-')
+  return `${d} ${_MONTHS[Number(m) - 1]}`
+}
 export function lastSessions(n) {
   const out = []; const d = new Date()
   while (out.length < n) {

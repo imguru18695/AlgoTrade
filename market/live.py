@@ -151,11 +151,13 @@ def fetch_daily_history(kite, key: str, days: int = 260) -> dict | None:
         return None
 
     bars = bars[-days:]
+    last_date = bars[-1]["date"]
     result = {
         "close": [b["close"] for b in bars],
         "high":  [b["high"] for b in bars],
         "low":   [b["low"] for b in bars],
         "vol":   [b["volume"] for b in bars],
+        "asof":  last_date.date().isoformat() if hasattr(last_date, "date") else str(last_date)[:10],
     }
     _HISTORY_CACHE[key] = (now, result)
     return result

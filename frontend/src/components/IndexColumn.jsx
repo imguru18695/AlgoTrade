@@ -1,5 +1,5 @@
 import { Card, CardHead, Row, Tag } from './ui.jsx'
-import { n0, n2, upc, stateColor, lastSessions } from '../util.js'
+import { n0, n2, upc, stateColor, lastSessions, fmtDate } from '../util.js'
 
 const toneColor = t => (t === 'up' ? 'var(--up)' : t === 'down' ? 'var(--down)' : 'var(--amber)')
 
@@ -14,7 +14,9 @@ export default function IndexColumn({ ix }) {
         <CardHead title={`${ix.name} · Historical Sessions`}
           right={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {ix.data_source === 'simulated' && <Tag color="var(--amber)">TBC</Tag>}
-            <span className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>SPOT: {n2(ix.value)}</span>
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+              SPOT: {n2(ix.value)}{ix.spot_date && <span style={{ color: 'var(--muted-2)' }}> · {fmtDate(ix.spot_date)}</span>}
+            </span>
           </div>} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, padding: '14px 18px 12px' }}>
           {ix.last5.map((v, i) => {

@@ -69,7 +69,11 @@ def _daily_series(key: str, base: float, days: int = 260) -> dict:
     for c in closes:
         rp = abs(rng.gauss(0, 0.004)) + 0.002
         highs.append(c * (1 + rp)); lows.append(c * (1 - rp)); vols.append(rng.uniform(0.7, 1.3) * 1e6)
-    return {"close": closes, "high": highs, "low": lows, "vol": vols}
+    # The series is reseeded fresh each calendar day (see rng above) and
+    # pinned so closes[-1] == base, i.e. "today" IS the last bar by
+    # construction — asof reflects that rather than a fixed/arbitrary date.
+    return {"close": closes, "high": highs, "low": lows, "vol": vols,
+            "asof": datetime.now(IST).date().isoformat()}
 
 
 # ── formatting & classification ─────────────────────────────────────────────────
@@ -149,6 +153,10 @@ def _index_block(key, cfg, kite=None, live_quote=None):
     spot = closes[-1]
     chg = (closes[-1] - closes[-2]) / closes[-2] * 100
     spot_source = "simulated" if source == "simulated" else "kite-series"
+    # Date the displayed spot reflects: the daily bar's date by default, or
+    # "now" (IST) once a real-time tick below overrides the spot itself —
+    # keeps the label truthful for both paths rather than always saying "today".
+    spot_date = s.get("asof")
 
     if key == "NIFTY" and kite is not None:
         # kite's presence signals "live mode" (main.py, a session is active) —
@@ -167,12 +175,15 @@ def _index_block(key, cfg, kite=None, live_quote=None):
             spot = nse_spot
             chg = (spot - closes[-2]) / closes[-2] * 100
             spot_source = "jugaad"
+            spot_date = datetime.now(IST).date().isoformat()
         elif live_quote:
             spot, chg = live_quote["spot"], live_quote["chg_pct"]
             spot_source = "kite"
+            spot_date = datetime.now(IST).date().isoformat()
     elif live_quote:
         spot, chg = live_quote["spot"], live_quote["chg_pct"]
         spot_source = "kite"
+        spot_date = datetime.now(IST).date().isoformat()
 
     last5 = [round((closes[-i] - closes[-i - 1]) / closes[-i - 1] * 100, 2) for i in range(1, 6)]
 
@@ -200,7 +211,7 @@ def _index_block(key, cfg, kite=None, live_quote=None):
 
     return {
         "key": key, "name": cfg["name"], "exchange": cfg["exchange"],
-        "data_source": source, "spot_source": spot_source,
+        "data_source": source, "spot_source": spot_source, "spot_date": spot_date,
         "value": round(spot, 2), "chg_pct": round(chg, 2), "last5": last5,
         "hist_insight": _sessions_insight(last5),
         "w52": _w52(closes, spot),
