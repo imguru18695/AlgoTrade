@@ -96,6 +96,17 @@ def init_db():
                 UNIQUE(tradingsymbol, exchange, product)
             );
 
+            CREATE TABLE IF NOT EXISTS login_accounts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                username        TEXT NOT NULL UNIQUE,
+                password_hash   TEXT NOT NULL,
+                is_active       INTEGER NOT NULL DEFAULT 1,
+                failed_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until    TEXT,
+                last_login_at   TEXT,
+                created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS basket_rm (
                 basket_id       INTEGER PRIMARY KEY REFERENCES baskets(id) ON DELETE CASCADE,
                 -- Profit Target

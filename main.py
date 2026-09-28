@@ -4,16 +4,17 @@ import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from database import init_db
-from sso import verify_token
+from sso import make_token, verify_token
 from auth.routes import router as auth_router
 from auth.token_store import load_token, load_user_id
+from auth.local_login import verify_login as verify_local_login
 from baskets.routes import router as baskets_router
 from logs.routes import router as logs_router
 from execution.routes import router as execution_router
@@ -285,6 +286,26 @@ templates = Jinja2Templates(directory="templates")
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_form(request: Request, error: str = ""):
+    return templates.TemplateResponse("login.html", {"request": request, "error": bool(error)})
+
+
+@app.post("/login")
+async def login_submit(username: str = Form(...), password: str = Form(...)):
+    if not verify_local_login(username, password):
+        logging.warning(f"Failed local login attempt for user {username!r}")
+        return RedirectResponse(url="/login?error=1", status_code=303)
+
+    session_token = make_token(SSO_ACCOUNT_NAME, 12 * 3600)
+    resp = RedirectResponse(url="/dashboard", status_code=303)
+    resp.set_cookie(
+        "cx_session", session_token,
+        httponly=True, secure=True, samesite="lax", max_age=12 * 3600,
+    )
+    return resp
 
 
 async def _page_context(request: Request) -> dict | None:
