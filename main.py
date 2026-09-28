@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
@@ -7,8 +8,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from database import init_db
+from sso import verify_token
 from auth.routes import router as auth_router
 from auth.token_store import load_token, load_user_id
 from baskets.routes import router as baskets_router
@@ -221,7 +224,31 @@ async def lifespan(app: FastAPI):
     ticker.stop()
 
 
+SSO_ACCOUNT_NAME = os.environ["SSO_ACCOUNT_NAME"]
+
+
+def _has_valid_session(request: Request) -> bool:
+    """True if this visitor either has an active Kite session (the existing
+    gate) or arrived via convexitysystems.com's login and holds a valid
+    session cookie for THIS account specifically — a cookie minted for a
+    different account must not pass here."""
+    if load_token():
+        return True
+    return verify_token(request.cookies.get("cx_session", "")) == SSO_ACCOUNT_NAME
+
+
+class _DashboardGuard(BaseHTTPMiddleware):
+    """The React dashboard is a StaticFiles mount, so it can't carry a
+    per-route auth dependency the way the Jinja pages do — this is the
+    equivalent gate, checked before the static files are ever served."""
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith("/dashboard") and not _has_valid_session(request):
+            return RedirectResponse(url="/auth/login")
+        return await call_next(request)
+
+
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(_DashboardGuard)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -233,12 +260,14 @@ async def api_session():
 
 
 @app.get("/api/dashboard")
-async def api_dashboard():
+async def api_dashboard(request: Request):
     """Market dashboard snapshot — NIFTY/SENSEX/BANKNIFTY/INDIA VIX are live
     via Kite when a session is active, simulated otherwise (same shape either
     way). build_dashboard() makes blocking Kite HTTP calls, so it runs off the
     event loop — same convention as _refresh_cache — to avoid stalling the RM
     engine and other requests for the duration of those calls."""
+    if not _has_valid_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
     from market import snapshot
     kite = get_kite() if load_token() else None
     data = await asyncio.to_thread(snapshot.build_dashboard, kite)
@@ -261,7 +290,7 @@ async def home(request: Request):
 async def _page_context(request: Request) -> dict | None:
     """Shared context builder for dashboard and management pages.
     Returns None and sets a redirect if auth fails."""
-    if not load_token():
+    if not _has_valid_session(request):
         return None
     try:
         await _refresh_cache()
@@ -308,8 +337,10 @@ async def management(request: Request):
 
 
 @app.get("/debug/positions")
-async def debug_positions():
+async def debug_positions(request: Request):
     """Compare our computed P&L against Kite's own field — helps diagnose MTM discrepancies."""
+    if not _has_valid_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
     from kite.client import get_kite
     raw = await asyncio.to_thread(get_kite().positions)
     rows = []
@@ -342,8 +373,10 @@ async def debug_positions():
 
 
 @app.get("/pnl")
-async def get_pnl():
+async def get_pnl(request: Request):
     """Lightweight P&L endpoint — recomputes from ticker/last_price without a Kite API call."""
+    if not _has_valid_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
     positions_data: dict[str, dict] = {}
     total_pnl = 0.0
 

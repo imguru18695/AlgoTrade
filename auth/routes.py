@@ -1,13 +1,19 @@
 import asyncio
 import logging
+import os
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from kiteconnect import KiteConnect
 from config import KITE_API_KEY, KITE_API_SECRET, REDIRECT_URL
 from auth.token_store import save_token, clear_token
 from kite.client import reset_kite
+from sso import make_token, verify_token
 
 router = APIRouter(prefix="/auth")
+
+SSO_ACCOUNT_NAME = os.environ["SSO_ACCOUNT_NAME"]
+SSO_SESSION_COOKIE = "cx_session"
+SSO_SESSION_TTL_SECONDS = 12 * 3600
 
 
 def _kite() -> KiteConnect:
@@ -64,8 +70,31 @@ async def callback(request: Request):
     return RedirectResponse(url="/dashboard", status_code=302)
 
 
+@router.get("/sso")
+async def sso_login(token: str = ""):
+    """Entry point for a visitor arriving from convexitysystems.com's login.
+    Verifies the short-lived handoff token names THIS account specifically
+    (a token minted for a different account must not work here), then mints
+    a longer-lived session cookie so they don't need Kite OAuth just to view
+    the dashboard — Kite login is still separately required to trade."""
+    account = verify_token(token)
+    if account != SSO_ACCOUNT_NAME:
+        logging.warning(f"Rejected SSO token (resolved account: {account!r})")
+        return RedirectResponse(url="/auth/login", status_code=303)
+
+    session_token = make_token(account, SSO_SESSION_TTL_SECONDS)
+    resp = RedirectResponse(url="/dashboard", status_code=303)
+    resp.set_cookie(
+        SSO_SESSION_COOKIE, session_token,
+        httponly=True, secure=True, samesite="lax", max_age=SSO_SESSION_TTL_SECONDS,
+    )
+    return resp
+
+
 @router.get("/logout")
 async def logout():
     clear_token()
     reset_kite()
-    return RedirectResponse(url="/auth/login", status_code=302)
+    resp = RedirectResponse(url="/auth/login", status_code=302)
+    resp.delete_cookie(SSO_SESSION_COOKIE)
+    return resp
