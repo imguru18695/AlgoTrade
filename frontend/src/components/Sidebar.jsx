@@ -76,8 +76,8 @@ export default function Sidebar({ collapsed, onToggle, active = 'dashboard', ses
               <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text)' }}>Zerodha Kite</span>
               <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 600, color: dotColor, background: `color-mix(in srgb,${dotColor} 12%,transparent)`, padding: '1px 7px', borderRadius: 4 }}>{statusLabel}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: 5 }}>Client <span className="mono" style={{ color: 'var(--text-2)' }}>AB1234</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: known ? 12 : 0 }}>Latency <span className="mono" style={{ color: 'var(--up)' }}>12.4 ms</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: 5 }}>Client <span className="mono" style={{ color: loggedIn && session?.user_id ? 'var(--text-2)' : 'var(--muted)' }}>{loggedIn && session?.user_id ? session.user_id : 'Not connected'}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: known ? 12 : 0 }}>Latency <span className="mono" style={{ color: 'var(--muted)' }}>{loggedIn ? '—' : 'Not connected'}</span></div>
             {known && (
               <a href={loggedIn ? '/auth/logout' : '/auth/login'}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12, fontWeight: 500,

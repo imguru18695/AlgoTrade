@@ -257,7 +257,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def api_session():
     """Whether a Kite session is currently active — lets the public React
     dashboard show Login/Logout correctly without guessing from data shape."""
-    return JSONResponse({"logged_in": bool(load_token())})
+    token = load_token()
+    return JSONResponse({"logged_in": bool(token), "user_id": load_user_id() if token else None})
 
 
 @app.get("/api/dashboard")
