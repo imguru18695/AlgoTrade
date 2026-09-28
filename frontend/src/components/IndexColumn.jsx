@@ -12,7 +12,10 @@ export default function IndexColumn({ ix }) {
       {/* Historical sessions */}
       <Card>
         <CardHead title={`${ix.name} · Historical Sessions`}
-          right={<span className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>SPOT: {n2(ix.value)}</span>} />
+          right={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {ix.data_source === 'simulated' && <Tag color="var(--amber)">TBC</Tag>}
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>SPOT: {n2(ix.value)}</span>
+          </div>} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, padding: '14px 18px 12px' }}>
           {ix.last5.map((v, i) => {
             const c = upc(v)
@@ -36,7 +39,10 @@ export default function IndexColumn({ ix }) {
       <Card>
         <div style={{ padding: '15px 18px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 10, color: 'var(--muted-2)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600 }}>52W Range</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 10, color: 'var(--muted-2)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600 }}>52W Range</span>
+              {ix.data_source === 'simulated' && <Tag color="var(--amber)">TBC</Tag>}
+            </div>
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--teal)', fontWeight: 600 }}>{ix.w52.pos_pct}%</span>
           </div>
           <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'linear-gradient(90deg,rgba(248,113,122,.35),var(--line) 50%,rgba(52,211,153,.35))', margin: '18px 0 12px' }}>
@@ -52,7 +58,10 @@ export default function IndexColumn({ ix }) {
       {/* Technicals */}
       <Card>
         <CardHead title={`${ix.name} Technicals`}
-          right={<Tag color={stateColor(ix.trend.bias)}>{ix.trend.bias}</Tag>} />
+          right={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {ix.data_source === 'simulated' && <Tag color="var(--amber)">TBC</Tag>}
+            <Tag color={stateColor(ix.trend.bias)}>{ix.trend.bias}</Tag>
+          </div>} />
         <div className="rows">
           {[20, 50, 100, 200].map(p => {
             const e = ix.ema[p], above = ix.value >= e, dist = (ix.value - e) / e * 100
