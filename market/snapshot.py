@@ -39,6 +39,23 @@ _TICKER_EXTRA = {"BANKNIFTY": {"base": 53180.0}, "INDIA VIX": {"base": 14.38}}
 _MA_PERIODS = list(range(5, 101, 5))   # 20 SMAs: 5,10,…,100
 
 
+def _last_close_date(now: datetime | None = None) -> str:
+    """Date (IST, ISO string) of the most recently COMPLETED trading session.
+    A quote fetched while the market is shut — weekend, holiday, or simply
+    before today's 09:15 open — is always the prior close frozen in place,
+    never a fresh tick, so it must be dated with that session, not "now".
+    Only once today's own session has opened does "today" become correct.
+    Weekends only — no holiday calendar wired in yet, same as _market_status."""
+    now = now or datetime.now(IST)
+    d = now.date()
+    mins = now.hour * 60 + now.minute
+    if d.weekday() >= 5 or mins < 555:   # Sat/Sun, or before today's 09:15 open
+        d -= timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+    return d.isoformat()
+
+
 def _live_or_simulated_series(key: str, cfg: dict, kite) -> tuple[dict, str]:
     """Daily OHLCV series for one index: live via Kite if a session is passed
     and the fetch succeeds, else the deterministic simulated series."""
@@ -70,10 +87,10 @@ def _daily_series(key: str, base: float, days: int = 260) -> dict:
         rp = abs(rng.gauss(0, 0.004)) + 0.002
         highs.append(c * (1 + rp)); lows.append(c * (1 - rp)); vols.append(rng.uniform(0.7, 1.3) * 1e6)
     # The series is reseeded fresh each calendar day (see rng above) and
-    # pinned so closes[-1] == base, i.e. "today" IS the last bar by
-    # construction — asof reflects that rather than a fixed/arbitrary date.
+    # pinned so closes[-1] == base, i.e. the last bar represents the most
+    # recent close by construction — asof names that session's actual date.
     return {"close": closes, "high": highs, "low": lows, "vol": vols,
-            "asof": datetime.now(IST).date().isoformat()}
+            "asof": _last_close_date()}
 
 
 # ── formatting & classification ─────────────────────────────────────────────────
@@ -175,15 +192,15 @@ def _index_block(key, cfg, kite=None, live_quote=None):
             spot = nse_spot
             chg = (spot - closes[-2]) / closes[-2] * 100
             spot_source = "jugaad"
-            spot_date = datetime.now(IST).date().isoformat()
+            spot_date = _last_close_date()
         elif live_quote:
             spot, chg = live_quote["spot"], live_quote["chg_pct"]
             spot_source = "kite"
-            spot_date = datetime.now(IST).date().isoformat()
+            spot_date = _last_close_date()
     elif live_quote:
         spot, chg = live_quote["spot"], live_quote["chg_pct"]
         spot_source = "kite"
-        spot_date = datetime.now(IST).date().isoformat()
+        spot_date = _last_close_date()
 
     last5 = [round((closes[-i] - closes[-i - 1]) / closes[-i - 1] * 100, 2) for i in range(1, 6)]
 
