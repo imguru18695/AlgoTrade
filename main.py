@@ -309,6 +309,17 @@ async def login_submit(username: str = Form(...), password: str = Form(...)):
     return resp
 
 
+@app.get("/exit")
+async def exit_terminal():
+    """Ends the page-level terminal session (the /login cookie) and returns
+    to the public landing page. Deliberately independent of the Kite broker
+    session (auth/routes.py's /auth/logout) — exiting the terminal does not
+    disconnect the broker, which keeps running server-side regardless."""
+    resp = RedirectResponse(url="/", status_code=303)
+    resp.delete_cookie("cx_session")
+    return resp
+
+
 async def _page_context(request: Request) -> dict | None:
     """Shared context builder for dashboard and management pages.
     Returns None and sets a redirect if auth fails."""

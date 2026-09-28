@@ -58,12 +58,20 @@ export default function Sidebar({ collapsed, onToggle, active = 'dashboard', ses
           <div title={`Zerodha Kite · ${statusLabel}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, boxShadow: `0 0 7px ${dotColor}` }} />
             {known && (
-              <a href={loggedIn ? '/auth/logout' : '/auth/login'} title={loggedIn ? 'Logout' : 'Log in'}
+              <a href={loggedIn ? '/auth/logout' : '/auth/login'} title={loggedIn ? 'Disconnect Broker' : 'Connect Broker'}
                 style={{ color: 'var(--muted)', display: 'flex' }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                   <polyline points={loggedIn ? "16 17 21 12 16 7" : "16 7 21 12 16 17"}/>
                   <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </a>
+            )}
+            {known && (
+              <a href="/exit" title="Exit Terminal" style={{ color: 'var(--muted)', display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </a>
             )}
@@ -79,17 +87,29 @@ export default function Sidebar({ collapsed, onToggle, active = 'dashboard', ses
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: 5 }}>Client <span className="mono" style={{ color: loggedIn && session?.user_id ? 'var(--text-2)' : 'var(--muted)' }}>{loggedIn && session?.user_id ? session.user_id : 'Not connected'}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginBottom: known ? 12 : 0 }}>Latency <span className="mono" style={{ color: 'var(--muted)' }}>{loggedIn ? '—' : 'Not connected'}</span></div>
             {known && (
-              <a href={loggedIn ? '/auth/logout' : '/auth/login'}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12, fontWeight: 500,
-                  color: 'var(--text-2)', background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 7,
-                  padding: '8px', textDecoration: 'none' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                  <polyline points={loggedIn ? "16 17 21 12 16 7" : "16 7 21 12 16 17"}/>
-                  <line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-                {loggedIn ? 'Logout' : 'Log in'}
-              </a>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <a href={loggedIn ? '/auth/logout' : '/auth/login'}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12, fontWeight: 500,
+                    color: 'var(--text-2)', background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 7,
+                    padding: '8px', textDecoration: 'none' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points={loggedIn ? "16 17 21 12 16 7" : "16 7 21 12 16 17"}/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                  {loggedIn ? 'Disconnect Broker' : 'Connect Broker'}
+                </a>
+                <a href="/exit"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12, fontWeight: 500,
+                    color: 'var(--muted)', background: 'transparent', border: '1px solid var(--line-2)', borderRadius: 7,
+                    padding: '8px', textDecoration: 'none' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                  Exit Terminal
+                </a>
+              </div>
             )}
           </>
         )}

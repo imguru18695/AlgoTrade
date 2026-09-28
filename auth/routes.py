@@ -93,8 +93,13 @@ async def sso_login(token: str = ""):
 
 @router.get("/logout")
 async def logout():
+    """Disconnects the Kite broker session only — deliberately does NOT clear
+    the page-session cookie, so this stays independent of Exit Terminal
+    (main.py): you can disconnect the broker and remain in the terminal
+    (dashboard falls back to simulated/TBC data), or exit the terminal while
+    the broker session stays alive server-side. Redirects back to the
+    dashboard rather than the Kite login page, since disconnecting no longer
+    implies leaving."""
     clear_token()
     reset_kite()
-    resp = RedirectResponse(url="/auth/login", status_code=302)
-    resp.delete_cookie(SSO_SESSION_COOKIE)
-    return resp
+    return RedirectResponse(url="/dashboard", status_code=302)
