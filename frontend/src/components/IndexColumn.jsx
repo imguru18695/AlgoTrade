@@ -71,14 +71,14 @@ export default function IndexColumn({ ix }) {
       {/* Derivatives */}
       <Card>
         <CardHead title={`${ix.name} Derivatives`} sub={`${ix.exchange} Contracts`}
-          right={<span className="mono" style={{ fontSize: 11, color: 'var(--muted)' }}>FUT BASIS: <b style={{ color: 'var(--up)' }}>+{d.fut_basis}</b></span>} />
+          right={<span className="mono" style={{ fontSize: 11, color: 'var(--muted)' }}>FUT BASIS: <b style={{ color: d.fut_basis != null ? 'var(--up)' : 'var(--muted)' }}>{d.fut_basis != null ? `+${d.fut_basis}` : '—'}</b></span>} />
         <div className="rows">
-          <Row label="Open Interest (OI)" value={d.oi_total} tag={`${d.oi_chg_pct >= 0 ? '+' : ''}${d.oi_chg_pct}% Change`} tagColor={upc(d.oi_chg_pct)} />
-          <Row label="Put-Call Ratio (PCR)" value={d.pcr?.toFixed(2)} tag={d.pcr_label} tagColor={stateColor(d.pcr_label)} />
-          <Row label="Max Pain Strike" value={n0(d.max_pain)} tag={`Exp ${d.expiry}`} tagColor="var(--muted)" />
-          <Row label="Implied Volatility (IV)" value={`${d.iv}%`} tag={`VIX at ${d.vix}`} tagColor="var(--muted)" />
-          <Row label="Active Call OI Cluster" value={`${n0(d.call_cluster.strike)} Strike`} tag={`${d.call_cluster.contracts} Contracts`} tagColor="var(--muted)" />
-          <Row label="Active Put OI Cluster" value={`${n0(d.put_cluster.strike)} Strike`} tag={`${d.put_cluster.contracts} Contracts`} tagColor="var(--muted)" />
+          <Row label="Open Interest (OI)" value={d.oi_total ?? '—'} tag={d.oi_chg_pct != null ? `${d.oi_chg_pct >= 0 ? '+' : ''}${d.oi_chg_pct}% Change` : undefined} tagColor={d.oi_chg_pct != null ? upc(d.oi_chg_pct) : undefined} />
+          <Row label="Put-Call Ratio (PCR)" value={d.pcr?.toFixed(2) ?? '—'} tag={d.pcr_label} tagColor={d.pcr_label ? stateColor(d.pcr_label) : undefined} />
+          <Row label="Max Pain Strike" value={d.max_pain != null ? n0(d.max_pain) : '—'} tag={`Exp ${d.expiry}`} tagColor="var(--muted)" />
+          <Row label="Implied Volatility (IV)" value={d.iv != null ? `${d.iv}%` : '—'} tag={d.vix != null ? `VIX at ${d.vix}` : undefined} tagColor="var(--muted)" />
+          <Row label="Active Call OI Cluster" value={d.call_cluster ? `${n0(d.call_cluster.strike)} Strike` : '—'} tag={d.call_cluster?.contracts != null ? `${d.call_cluster.contracts} Contracts` : undefined} tagColor="var(--muted)" />
+          <Row label="Active Put OI Cluster" value={d.put_cluster ? `${n0(d.put_cluster.strike)} Strike` : '—'} tag={d.put_cluster?.contracts != null ? `${d.put_cluster.contracts} Contracts` : undefined} tagColor="var(--muted)" />
         </div>
       </Card>
     </div>

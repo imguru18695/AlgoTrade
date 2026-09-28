@@ -13,15 +13,15 @@ series independently if the live call fails, so a Kite hiccup degrades one
 card, never the page. `kite=None` (e.g. demo.py, no active session) is fully
 simulated, unchanged from before.
 
-STILL SIMULATED regardless of `kite`: option chain / PCR / max-pain / OI
-(`_chain`), FII/DII flows, sectors, and globals — separate connections, not
-yet wired. The response shape does not change either way, so the frontend
-never needs to know which parts are live.
+STILL NOT WIRED to any real source: option chain / PCR / max-pain / OI,
+FII/DII flows, sectors, and globals — separate connections, not built yet.
+Rather than simulate plausible-looking numbers for these, every field in
+that category is `None` — the frontend renders that as a blank placeholder,
+so nothing on screen is ever a fake number dressed up as real data.
 """
 from __future__ import annotations
 
 import logging
-import math
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -32,8 +32,8 @@ log = logging.getLogger("market.snapshot")
 IST = timezone(timedelta(hours=5, minutes=30))
 
 _INDICES = {
-    "NIFTY":  {"name": "NIFTY 50", "exchange": "NSE", "base": 23350.0, "step": 50,  "constituents": 50},
-    "SENSEX": {"name": "SENSEX",   "exchange": "BSE", "base": 76890.0, "step": 100, "constituents": 30},
+    "NIFTY":  {"name": "NIFTY 50", "exchange": "NSE", "base": 23350.0, "step": 50},
+    "SENSEX": {"name": "SENSEX",   "exchange": "BSE", "base": 76890.0, "step": 100},
 }
 _TICKER_EXTRA = {"BANKNIFTY": {"base": 53180.0}, "INDIA VIX": {"base": 14.38}}
 _MA_PERIODS = list(range(5, 101, 5))   # 20 SMAs: 5,10,…,100
@@ -72,29 +72,7 @@ def _daily_series(key: str, base: float, days: int = 260) -> dict:
     return {"close": closes, "high": highs, "low": lows, "vol": vols}
 
 
-def _chain(key: str, step: int, spot: float) -> list[dict]:
-    rng = random.Random(f"{key}-chain-{datetime.now(IST).date().isoformat()}")
-    atm = round(spot / step) * step
-    strikes = []
-    for i in range(-10, 11):
-        k = atm + i * step
-        dist = abs(i) / 10.0
-        base_oi = 4_000_000 * math.exp(-dist * 2.2)
-        strikes.append({
-            "strike": k,
-            "oi_ce": int(base_oi * rng.uniform(0.7, 1.3)),
-            "oi_pe": int(base_oi * rng.uniform(0.8, 1.4)),
-            "chg_ce": rng.uniform(-4, 12), "chg_pe": rng.uniform(-3, 16),
-            "iv": 14 + dist * 4 + rng.uniform(-0.5, 0.5),
-        })
-    return strikes
-
-
 # ── formatting & classification ─────────────────────────────────────────────────
-
-def _cr(v): return f"{v / 1e7:.2f} Cr"
-def _lakh(v): return f"{v / 1e5:.1f}L"
-def _pct(v): return round(v, 2)
 
 def _rsi_label(r):
     if r >= 70: return "Overbought"
@@ -103,13 +81,6 @@ def _rsi_label(r):
     if r >= 45: return "Balanced"
     if r >= 30: return "Weak"
     return "Oversold"
-
-def _pcr_label(p):
-    if p >= 1.2: return "Bullish"
-    if p >= 1.05: return "Bullish Range"
-    if p >= 0.95: return "Neutral"
-    if p >= 0.85: return "Neutral-Bearish"
-    return "Bearish"
 
 def _ma_label(above, total):
     r = above / total
@@ -224,20 +195,8 @@ def _index_block(key, cfg, kite=None, live_quote=None):
     else:
         sr_note = "Consolidating"
 
-    n = cfg["constituents"]
-    adv = max(0, min(n, round(n * (0.5 + chg / 4))))
-    dec = n - adv
-    breadth_note = "Balanced" if abs(adv - dec) <= n * 0.2 else ("Bullish" if adv > dec else "Bearish")
-
     above = ind.ma_above_count(closes, _MA_PERIODS)
     ma_sig = {"label": _ma_label(above, len(_MA_PERIODS)), "above": above, "total": len(_MA_PERIODS)}
-
-    strikes = _chain(key, step, spot)
-    call_tot = sum(x["oi_ce"] for x in strikes); put_tot = sum(x["oi_pe"] for x in strikes)
-    oi_chg = sum(x["oi_ce"] * x["chg_ce"] + x["oi_pe"] * x["chg_pe"] for x in strikes) / (call_tot + put_tot)
-    pcr = round(put_tot / call_tot, 2) if call_tot else None
-    cc = max(strikes, key=lambda x: x["oi_ce"]); pc = max(strikes, key=lambda x: x["oi_pe"])
-    atm_iv = round(sum(x["iv"] for x in strikes) / len(strikes), 1)
 
     return {
         "key": key, "name": cfg["name"], "exchange": cfg["exchange"],
@@ -250,51 +209,43 @@ def _index_block(key, cfg, kite=None, live_quote=None):
         "macd": {"value": macd["macd"], "state": macd["state"],
                  "label": ("Bullish Cross" if macd["state"] == "Bullish" else "Bearish Cross")},
         "sr": {"support": sup, "resistance": res, "note": sr_note},
-        "breadth": {"adv": adv, "dec": dec, "note": breadth_note},
         "ma_signal": ma_sig,
         "ema": {p: round(ind.ema(closes, p)) for p in (20, 50, 100, 200)},
         "obv": ind.obv(closes, vols),
         "ad": ind.adl(highs, lows, closes, vols),
         "stoch": ind.stochastic(highs, lows, closes),
+        # Option chain / OI / PCR / max-pain / IV are not wired to any real
+        # source yet (see module docstring) — None throughout rather than a
+        # plausible-looking simulated number. expiry is real (pure calendar
+        # math, not data), so it stays populated either way.
         "deriv": {
-            "oi_total": _cr(call_tot + put_tot), "oi_chg_pct": round(oi_chg, 2),
-            "pcr": pcr, "pcr_label": _pcr_label(pcr) if pcr else "—",
-            "max_pain": ind.max_pain(strikes), "expiry": _next_expiry(True),
-            "iv": atm_iv, "vix": _TICKER_EXTRA["INDIA VIX"]["base"],
-            "fut_basis": round(spot * 0.0009, 2),
-            "call_cluster": {"strike": cc["strike"], "contracts": _lakh(cc["oi_ce"])},
-            "put_cluster": {"strike": pc["strike"], "contracts": _lakh(pc["oi_pe"])},
+            "oi_total": None, "oi_chg_pct": None,
+            "pcr": None, "pcr_label": None,
+            "max_pain": None, "expiry": _next_expiry(True),
+            "iv": None, "vix": None,
+            "fut_basis": None,
+            "call_cluster": None,
+            "put_cluster": None,
         },
     }
 
 
-# ── market-intelligence rail (simulated) ────────────────────────────────────────
+# ── market-intelligence rail (not wired — None values, real category labels) ────
 
 def _flows():
-    rng = random.Random(f"flows-{datetime.now(IST).date().isoformat()}")
-    fii = round(rng.uniform(-2500, 3000), 2)
-    dii = round(rng.uniform(-1500, 2000), 2)
-    adv = rng.randint(900, 1500); dec = rng.randint(600, 1200)
-    return {"fii": fii, "dii": dii, "combined": round(fii + dii, 2),
-            "breadth": {"adv": adv, "dec": dec}}
+    return {"fii": None, "dii": None, "combined": None,
+            "breadth": {"adv": None, "dec": None}}
 
 
 def _globals():
-    rng = random.Random(f"globals-{datetime.now(IST).date().isoformat()}")
-    defs = [("Gold", "$/oz", 2650.0), ("Silver", "$/oz", 30.80),
-            ("Crude (Brent)", "$/bbl", 78.00), ("US 10Y", "%", 4.28)]
-    out = []
-    for name, unit, base in defs:
-        chg = round(rng.uniform(-1.2, 1.2), 2)
-        out.append({"name": name, "unit": unit, "value": round(base * (1 + chg / 100), 2), "chg_pct": chg})
-    return out
+    defs = [("Gold", "$/oz"), ("Silver", "$/oz"),
+            ("Crude (Brent)", "$/bbl"), ("US 10Y", "%")]
+    return [{"name": name, "unit": unit, "value": None, "chg_pct": None} for name, unit in defs]
 
 
 def _sectors():
-    rng = random.Random(f"sectors-{datetime.now(IST).date().isoformat()}")
     names = ["Nifty IT", "Nifty Bank", "Nifty Auto", "Nifty FMCG", "Nifty Pharma", "Nifty Energy"]
-    out = [{"name": nm, "chg": round(rng.uniform(-1.5, 2.0), 2)} for nm in names]
-    return sorted(out, key=lambda x: -x["chg"])
+    return [{"name": nm, "chg": None} for nm in names]
 
 
 def _market_status():
@@ -302,7 +253,6 @@ def _market_status():
     mins = now.hour * 60 + now.minute
     is_open = now.weekday() < 5 and 555 <= mins <= 930   # 09:15–15:30
     return {"state": "open" if is_open else "closed",
-            "note": "Live" if is_open else "Delayed 15m",
             "as_of": now.strftime("%d %b %H:%M IST")}
 
 
@@ -351,5 +301,4 @@ def build_dashboard(kite=None) -> dict:
         "globals": _globals(),
         "flows": _flows(),
         "sectors": _sectors(),
-        "iv_percentile": {"value": 28, "label": "Low"},
     }

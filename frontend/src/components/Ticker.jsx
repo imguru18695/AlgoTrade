@@ -20,7 +20,7 @@ export default function Ticker({ ticker = [], marketStatus }) {
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18, padding: '0 22px' }}>
         {marketStatus && (
           <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.04em', color: closed ? 'var(--down)' : 'var(--up)', background: 'color-mix(in srgb,' + (closed ? 'var(--down)' : 'var(--up)') + ' 12%,transparent)', padding: '4px 10px', borderRadius: 4 }}>
-            {closed ? `MARKET CLOSED (${marketStatus.note.toUpperCase()})` : 'MARKET OPEN'}
+            {closed ? 'MARKET CLOSED' : 'MARKET OPEN'}
           </span>
         )}
         {marketStatus && <span className="mono" style={{ fontSize: 11, color: 'var(--muted)' }}>Last Updated: {marketStatus.as_of}</span>}
