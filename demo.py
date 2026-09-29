@@ -650,6 +650,15 @@ async def logs_page():
     })
 
 
+@app.get("/api/logs")
+async def api_logs(basket_name: str = "", from_date: str = "", to_date: str = ""):
+    # Stub — matches main.py's /api/logs shape with the same empty demo data
+    return JSONResponse({
+        "events": [], "basket_names": [],
+        "basket_name": basket_name, "from_date": from_date, "to_date": to_date,
+    })
+
+
 @app.get("/auth/login", response_class=HTMLResponse)
 async def login():
     return RedirectResponse(url="/")

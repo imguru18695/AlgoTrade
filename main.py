@@ -3,6 +3,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -27,6 +28,8 @@ from kite.orders import place_exit_orders
 from rm.engine import run_engine, reset_basket, get_basket_state
 
 logging.basicConfig(level=logging.INFO)
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 # In-memory caches — updated only by _refresh_cache(), never by page loads directly
 _basket_cache: list[dict] = []
@@ -297,6 +300,31 @@ async def api_management(request: Request):
         "total_pnl":                ctx["total_pnl"],
         "user_id":                  ctx["user_id"],
         "demo_mode":                False,
+    })
+
+
+@app.get("/api/logs")
+async def api_logs(request: Request, basket_name: str = "", from_date: str = "", to_date: str = ""):
+    """Exit-log snapshot — the JSON twin of the /logs Jinja page, for the
+    React version. Reuses logs.service (the exact queries the Jinja page
+    already runs), so this can never drift from that logic. Gated on
+    _has_valid_session rather than the Jinja page's plain load_token() check
+    — the same, more-current convention as /api/dashboard and
+    /api/management, not a change to the old page's own route."""
+    if not _has_valid_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from logs import service as logs_service
+    today = datetime.now(IST).date()
+    effective_from = from_date or (today - timedelta(days=6)).isoformat()
+    effective_to = to_date or today.isoformat()
+    events = await asyncio.to_thread(logs_service.get_logs, basket_name or None, effective_from, effective_to)
+    basket_names = await asyncio.to_thread(logs_service.get_basket_names)
+    return JSONResponse({
+        "events":       events,
+        "basket_names": basket_names,
+        "basket_name":  basket_name,
+        "from_date":    effective_from,
+        "to_date":      effective_to,
     })
 
 

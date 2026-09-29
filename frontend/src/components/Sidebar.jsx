@@ -10,7 +10,7 @@ const NAV = [
 
 // Only these have a real page behind them today — everything else in NAV
 // stays a plain, non-interactive label rather than a click that goes nowhere.
-const NAVIGABLE = new Set(['dashboard', 'management'])
+const NAVIGABLE = new Set(['dashboard', 'management', 'logs'])
 
 function NavItem({ icon, label, active, collapsed, onClick }) {
   return (

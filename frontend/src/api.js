@@ -10,6 +10,16 @@ export async function fetchManagement() {
   return r.json()
 }
 
+export async function fetchLogs({ basketName = '', fromDate = '', toDate = '' } = {}) {
+  const params = new URLSearchParams()
+  if (basketName) params.set('basket_name', basketName)
+  if (fromDate) params.set('from_date', fromDate)
+  if (toDate) params.set('to_date', toDate)
+  const r = await fetch('/api/logs?' + params.toString())
+  if (!r.ok) throw new Error(`logs ${r.status}`)
+  return r.json()
+}
+
 export async function fetchPnl() {
   const r = await fetch('/pnl')
   if (!r.ok) throw new Error(`pnl ${r.status}`)
