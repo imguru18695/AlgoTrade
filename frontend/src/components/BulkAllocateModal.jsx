@@ -27,13 +27,13 @@ export default function BulkAllocateModal({ open, onClose, count, baskets, onSub
     <div onClick={e => e.target === e.currentTarget && onClose()}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
       <div style={{ background: 'var(--panel)', border: '1px solid var(--line-2)', borderRadius: 12, padding: 22, width: 340 }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 15 }}>Allocate Selected</h3>
-        <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--muted)' }}>{count} position{count !== 1 ? 's' : ''} selected</p>
+        <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>Allocate Selected</h3>
+        <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--muted)' }}>{count} position{count !== 1 ? 's' : ''} selected</p>
 
         <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
           {['existing', 'new'].map(t => (
             <button key={t} onClick={() => setTab(t)}
-              style={{ flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 600, borderRadius: 7, cursor: 'pointer',
+              style={{ flex: 1, padding: '8px 0', fontSize: 13.5, fontWeight: 600, borderRadius: 7, cursor: 'pointer',
                 background: tab === t ? 'var(--teal-dim)' : 'transparent',
                 color: tab === t ? 'var(--teal)' : 'var(--muted)',
                 border: '1px solid ' + (tab === t ? 'var(--teal)' : 'var(--line-2)') }}>
@@ -44,16 +44,16 @@ export default function BulkAllocateModal({ open, onClose, count, baskets, onSub
 
         {tab === 'existing' ? (
           <select value={basketId} onChange={e => setBasketId(e.target.value)} aria-label="Select existing basket"
-            style={{ width: '100%', padding: '9px 10px', borderRadius: 7, background: 'var(--panel-2)', border: '1px solid var(--line-2)', color: 'var(--text)', fontSize: 12.5 }}>
+            style={{ width: '100%', padding: '10px 11px', borderRadius: 7, background: 'var(--panel-2)', border: '1px solid var(--line-2)', color: 'var(--text)', fontSize: 14 }}>
             {baskets.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         ) : (
           <input type="text" value={basketName} onChange={e => setBasketName(e.target.value)} placeholder="Basket name (optional)"
             aria-label="New basket name"
-            style={{ width: '100%', padding: '9px 10px', borderRadius: 7, background: 'var(--panel-2)', border: '1px solid var(--line-2)', color: 'var(--text)', fontSize: 12.5, boxSizing: 'border-box' }} />
+            style={{ width: '100%', padding: '10px 11px', borderRadius: 7, background: 'var(--panel-2)', border: '1px solid var(--line-2)', color: 'var(--text)', fontSize: 14, boxSizing: 'border-box' }} />
         )}
 
-        {error && <p style={{ color: 'var(--down)', fontSize: 11.5, marginTop: 8 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--down)', fontSize: 13, marginTop: 8 }}>{error}</p>}
 
         <Button variant="primary" onClick={submit} style={{ width: '100%', marginTop: 16 }}>
           {tab === 'existing' ? 'Allocate' : 'Create & Allocate'}

@@ -39,8 +39,8 @@ export default function Management() {
     return () => { alive = false; clearInterval(id) }
   }, [data])
 
-  if (error) return <div style={{ padding: 16, color: 'var(--down)', fontSize: 13 }}>Could not load management: {error}</div>
-  if (!data) return <div style={{ padding: 16, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
+  if (error) return <div style={{ padding: 16, color: 'var(--down)', fontSize: 14.5 }}>Could not load management: {error}</div>
+  if (!data) return <div style={{ padding: 16, color: 'var(--muted)', fontSize: 14.5 }}>Loading…</div>
 
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>

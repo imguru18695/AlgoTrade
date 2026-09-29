@@ -108,7 +108,7 @@ export default function RMPanel({ basket, refresh }) {
 
   return (
     <div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 10 }}>Risk Management</div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 10 }}>Risk Management</div>
 
       <RmTwoFieldCard title="Profit Target" toggleLabel="Enable Profit Target" f1Label="Target P&L (₹)" f1Placeholder="e.g. 15000"
         draft={pt} onChange={setPt} onSave={savePT} onCancel={() => setPt({ active: rm.pt_active, inr: rm.pt_inr, ticks: rm.pt_ticks })} />
@@ -117,7 +117,7 @@ export default function RMPanel({ basket, refresh }) {
         draft={lg} onChange={setLg} onSave={saveLG} onCancel={() => setLg({ active: rm.lg_active, inr: rm.lg_inr, ticks: rm.lg_ticks })} />
 
       <Card style={{ marginBottom: 10 }}>
-        <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 12.5 }}>Profit Shield</div>
+        <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 14.5 }}>Profit Shield</div>
         <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Toggle checked={!!ps.active} onChange={active => setPs({ ...ps, active })} label="Enable Profit Shield" />
           <div style={{ display: 'flex', gap: 10 }}>
@@ -139,28 +139,28 @@ export default function RMPanel({ basket, refresh }) {
         </div>
       </Card>
 
-      <Card style={{ marginBottom: 10, padding: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <Card style={{ marginBottom: 10, padding: 15 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 13 }}>
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 600 }}>EOD Auto-Exit</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Exits all positions at 3:10 PM</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>EOD Auto-Exit</div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Exits all positions at 3:10 PM</div>
           </div>
           <Toggle checked={eod} onChange={toggleEod} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 600 }}>Delete Basket on Fire</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Removes basket automatically after exit</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Delete Basket on Fire</div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Removes basket automatically after exit</div>
           </div>
           <Toggle checked={dof} onChange={toggleDof} />
         </div>
       </Card>
 
-      <Card style={{ marginBottom: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Card style={{ marginBottom: 10, padding: 15, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>Basket Name</span>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Basket Name</span>
           <input type="text" value={name} onChange={e => setName(e.target.value)}
-            style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 6, color: 'var(--text)', padding: '7px 9px', fontSize: 12.5 }} />
+            style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 6, color: 'var(--text)', padding: '8px 10px', fontSize: 14 }} />
         </label>
         <Button variant="ghost" onClick={rename}>Rename</Button>
       </Card>

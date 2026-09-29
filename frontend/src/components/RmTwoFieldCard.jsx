@@ -9,8 +9,8 @@ export default function RmTwoFieldCard({
 }) {
   return (
     <Card style={{ marginBottom: 10 }}>
-      <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 12.5 }}>{title}</div>
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 14.5 }}>{title}</div>
+      <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Toggle checked={!!draft.active} onChange={active => onChange({ ...draft, active })} label={toggleLabel} />
         <div style={{ display: 'flex', gap: 10 }}>
           <NumberField label={f1Label} placeholder={f1Placeholder} disabled={!draft.active}

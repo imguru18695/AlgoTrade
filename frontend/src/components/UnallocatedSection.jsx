@@ -38,7 +38,7 @@ export default function UnallocatedSection({ unallocated, baskets, pnlPositions,
   return (
     <Card style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px', borderBottom: '1px solid var(--line)' }}>
-        <span style={{ fontWeight: 600, fontSize: 13.5 }}>Unallocated <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({unallocated.length})</span></span>
+        <span style={{ fontWeight: 600, fontSize: 15.5 }}>Unallocated <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({unallocated.length})</span></span>
         {selected.size > 0 && (
           <Button variant="primary" onClick={() => setModalOpen(true)}>Allocate Selected ({selected.size})</Button>
         )}

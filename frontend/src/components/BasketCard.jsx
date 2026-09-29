@@ -61,25 +61,25 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
       <div onClick={() => setExpanded(e => !e)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', cursor: 'pointer' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontWeight: 600, fontSize: 13.5 }}>{b.name}</span>
-            {b.fired && <Tag color="var(--down)">FIRED</Tag>}
+            <span style={{ fontWeight: 600, fontSize: 15.5 }}>{b.name}</span>
+            {b.fired && <Tag size={12} color="var(--down)">FIRED</Tag>}
             <div style={{ display: 'flex', gap: 4 }}>
               {[['PT', b.rm.pt_active], ['LG', b.rm.lg_active], ['PS', b.rm.ps_active], ['EOD', b.rm.eod_exit]].map(([label, on]) => (
-                <span key={label} title={label} style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 5px', borderRadius: 3,
+                <span key={label} title={label} style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 3,
                   color: on ? 'var(--teal)' : 'var(--muted-2)', background: on ? 'var(--teal-dim)' : 'var(--panel-2)' }}>{label}</span>
               ))}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {peakPnl != null && <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>Peak <span className="mono" style={{ color: 'var(--up)' }}>{inr(peakPnl)}</span></span>}
-            {psFloor != null && <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>PS Floor <span className="mono" style={{ color: 'var(--up)' }}>{inr(psFloor)}</span></span>}
+            {peakPnl != null && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Peak <span className="mono" style={{ color: 'var(--up)' }}>{inr(peakPnl)}</span></span>}
+            {psFloor != null && <span style={{ fontSize: 12, color: 'var(--muted)' }}>PS Floor <span className="mono" style={{ color: 'var(--up)' }}>{inr(psFloor)}</span></span>}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div className="mono" style={{ fontWeight: 700, fontSize: 15, color: upc(pnl) }}>{inr(pnl)}</div>
+          <div className="mono" style={{ fontWeight: 700, fontSize: 17, color: upc(pnl) }}>{inr(pnl)}</div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 3 }}>
-            {b.positions.length > 0 && <Tag color={upc(pnlPct)}>{pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%</Tag>}
-            <Tag color="var(--muted)">{b.positions.length} pos</Tag>
+            {b.positions.length > 0 && <Tag size={12} color={upc(pnlPct)}>{pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%</Tag>}
+            <Tag size={12} color="var(--muted)">{b.positions.length} pos</Tag>
           </div>
         </div>
         <Button variant="ghost" onClick={e => { e.stopPropagation(); setExpanded(true) }}>Edit</Button>
@@ -90,12 +90,12 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
         <div style={{ borderTop: '1px solid var(--line)', padding: 18, display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 20 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 13 }}>Positions</h3>
+              <h3 style={{ margin: 0, fontSize: 15 }}>Positions</h3>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', border: '1px solid var(--line-2)', borderRadius: 7, overflow: 'hidden' }}>
                   {['LIMIT', 'MARKET'].map(ot => (
                     <button key={ot} onClick={() => setOrderType(ot)}
-                      style={{ padding: '6px 12px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: 'none',
+                      style={{ padding: '7px 13px', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
                         background: b.order_type === ot ? 'var(--teal-dim)' : 'transparent',
                         color: b.order_type === ot ? 'var(--teal)' : 'var(--muted)' }}>{ot === 'LIMIT' ? 'Limit' : 'Market'}</button>
                   ))}
@@ -105,7 +105,7 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
                 )}
               </div>
             </div>
-            {unallocError && <p style={{ color: 'var(--down)', fontSize: 11.5, marginBottom: 8 }}>{unallocError}</p>}
+            {unallocError && <p style={{ color: 'var(--down)', fontSize: 13, marginBottom: 8 }}>{unallocError}</p>}
             <PositionsTable positions={b.positions} pnlPositions={pnlPositions} showProduct={false}
               selected={selected} onToggle={toggle} onToggleAll={toggleAll} />
           </div>
