@@ -47,6 +47,7 @@ def rename_basket(basket_id: int, name: str):
 
 def delete_basket(basket_id: int):
     with get_conn() as conn:
+        conn.execute("DELETE FROM basket_positions WHERE basket_id=?", (basket_id,))
         conn.execute("DELETE FROM baskets WHERE id=?", (basket_id,))
 
 
