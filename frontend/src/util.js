@@ -8,13 +8,16 @@ export const stateColor = s =>
     : 'var(--amber)'
 export const cr = v => (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Cr'
 export const inr = v => '₹' + n0(v)
+export function istNow() {
+  const now = new Date()
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000
+  return new Date(utc + 5.5 * 3600000)
+}
 // Ported verbatim from the old management.html poll gate — do not "simplify"
 // the boundary comparisons, they define exactly when live P&L polling
 // starts/stops on a real trading day.
 export function isMarketHours() {
-  const now = new Date()
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000
-  const ist = new Date(utc + 5.5 * 3600000)
+  const ist = istNow()
   const h = ist.getHours(), m = ist.getMinutes()
   return (h > 9 || (h === 9 && m >= 15)) && (h < 15 || (h === 15 && m < 30))
 }
