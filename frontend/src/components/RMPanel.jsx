@@ -8,6 +8,30 @@ function validatePT(inr) {
   return true
 }
 
+// Mirrors rm/engine.py's _detect_underlying — same prefixes, same
+// first-leg-wins rule, so what the UI shows matches what the engine acts on.
+const UNDERLYING_PREFIXES = ['BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTY', 'SENSEX']
+function detectUnderlying(positions) {
+  for (const p of positions) {
+    for (const prefix of UNDERLYING_PREFIXES) {
+      if (p.tradingsymbol?.startsWith(prefix)) return prefix
+    }
+  }
+  return null
+}
+
+function validateSpotGuard({ lower, upper }) {
+  if (!lower || !upper || lower <= 0 || upper <= 0) { window.alert('Spot Range Guard: both limits must be positive numbers.'); return false }
+  if (Number(lower) >= Number(upper)) { window.alert('Spot Range Guard: Lower limit must be less than Upper limit.'); return false }
+  return true
+}
+
+function validateVelocityGuard({ pct, minutes }) {
+  if (!pct || pct <= 0) { window.alert('Spot Velocity Guard: % Change must be a positive number.'); return false }
+  if (!minutes || minutes <= 0) { window.alert('Spot Velocity Guard: Time Window must be a positive number of minutes.'); return false }
+  return true
+}
+
 function validatePS({ trigger, lock, stepProfit, stepLock, ptInr }) {
   const t = trigger || 0, l = lock || 0, sp = stepProfit || 0, sl = stepLock || 0, pt = ptInr || 0
   if (t <= 0 || l <= 0) { window.alert('Profit Shield: All INR values must be positive.'); return false }
@@ -35,6 +59,8 @@ export default function RMPanel({ basket, refresh }) {
   const [pt, setPt] = useState({ active: rm.pt_active, inr: rm.pt_inr, ticks: rm.pt_ticks })
   const [lg, setLg] = useState({ active: rm.lg_active, inr: rm.lg_inr, ticks: rm.lg_ticks })
   const [ps, setPs] = useState({ active: rm.ps_active, trigger: rm.ps_trigger, lock: rm.ps_lock, stepProfit: rm.ps_step_profit, stepLock: rm.ps_step_lock })
+  const [spotGuard, setSpotGuard] = useState({ active: rm.spot_guard_active, lower: rm.spot_lower, upper: rm.spot_upper, ticks: rm.spot_guard_ticks })
+  const [velocityGuard, setVelocityGuard] = useState({ active: rm.velocity_guard_active, pct: rm.velocity_pct, minutes: rm.velocity_minutes })
   const [eod, setEod] = useState(!!rm.eod_exit)
   const [dof, setDof] = useState(!!(rm.delete_on_fire ?? 1))
   const [name, setName] = useState(basket.name)
@@ -49,6 +75,10 @@ export default function RMPanel({ basket, refresh }) {
     [rm.lg_active, rm.lg_inr, rm.lg_ticks])
   useEffect(() => setPs({ active: rm.ps_active, trigger: rm.ps_trigger, lock: rm.ps_lock, stepProfit: rm.ps_step_profit, stepLock: rm.ps_step_lock }),
     [rm.ps_active, rm.ps_trigger, rm.ps_lock, rm.ps_step_profit, rm.ps_step_lock])
+  useEffect(() => setSpotGuard({ active: rm.spot_guard_active, lower: rm.spot_lower, upper: rm.spot_upper, ticks: rm.spot_guard_ticks }),
+    [rm.spot_guard_active, rm.spot_lower, rm.spot_upper, rm.spot_guard_ticks])
+  useEffect(() => setVelocityGuard({ active: rm.velocity_guard_active, pct: rm.velocity_pct, minutes: rm.velocity_minutes }),
+    [rm.velocity_guard_active, rm.velocity_pct, rm.velocity_minutes])
   useEffect(() => setEod(!!rm.eod_exit), [rm.eod_exit])
   useEffect(() => setDof(!!(rm.delete_on_fire ?? 1)), [rm.delete_on_fire])
   useEffect(() => setName(basket.name), [basket.name])
@@ -67,6 +97,25 @@ export default function RMPanel({ basket, refresh }) {
       active: lg.active ? '1' : '0',
       inr: lg.active ? lg.inr : undefined,
       ticks: lg.active ? lg.ticks : undefined,
+    })
+    await refresh()
+  }
+  const saveSpotGuard = async () => {
+    if (!validateSpotGuard(spotGuard)) return
+    await postForm(`/baskets/${basket.id}/rm/spot-guard`, {
+      active: spotGuard.active ? '1' : '0',
+      lower: spotGuard.active ? spotGuard.lower : undefined,
+      upper: spotGuard.active ? spotGuard.upper : undefined,
+      ticks: spotGuard.active ? spotGuard.ticks : undefined,
+    })
+    await refresh()
+  }
+  const saveVelocityGuard = async () => {
+    if (!validateVelocityGuard(velocityGuard)) return
+    await postForm(`/baskets/${basket.id}/rm/velocity-guard`, {
+      active: velocityGuard.active ? '1' : '0',
+      pct: velocityGuard.active ? velocityGuard.pct : undefined,
+      minutes: velocityGuard.active ? velocityGuard.minutes : undefined,
     })
     await refresh()
   }
@@ -115,6 +164,53 @@ export default function RMPanel({ basket, refresh }) {
 
       <RmTwoFieldCard title="Loss Guard" toggleLabel="Enable Loss Guard" f1Label="Max Loss (₹)" f1Placeholder="e.g. 10000"
         draft={lg} onChange={setLg} onSave={saveLG} onCancel={() => setLg({ active: rm.lg_active, inr: rm.lg_inr, ticks: rm.lg_ticks })} />
+
+      {(() => {
+        const underlying = detectUnderlying(basket.positions || [])
+        return (
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: '-4px 0 10px' }}>
+            {underlying
+              ? <>Spot guards below watch <b style={{ color: 'var(--text-2)' }}>{underlying}</b> spot.</>
+              : 'Spot guards need index option legs to detect an underlying — not available for this basket.'}
+          </p>
+        )
+      })()}
+
+      <Card style={{ marginBottom: 10 }}>
+        <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 14.5 }}>Spot Range Guard</div>
+        <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Toggle checked={!!spotGuard.active} onChange={active => setSpotGuard({ ...spotGuard, active })} label="Enable Spot Range Guard" />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <NumberField label="Lower Limit" placeholder="e.g. 23000" disabled={!spotGuard.active}
+              value={spotGuard.lower} onChange={lower => setSpotGuard({ ...spotGuard, lower })} />
+            <NumberField label="Upper Limit" placeholder="e.g. 23500" disabled={!spotGuard.active}
+              value={spotGuard.upper} onChange={upper => setSpotGuard({ ...spotGuard, upper })} />
+          </div>
+          <NumberField label="Confirm Checks" hint="× 1 sec each" placeholder="e.g. 2-3" disabled={!spotGuard.active}
+            value={spotGuard.ticks} onChange={ticks => setSpotGuard({ ...spotGuard, ticks })} />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => setSpotGuard({ active: rm.spot_guard_active, lower: rm.spot_lower, upper: rm.spot_upper, ticks: rm.spot_guard_ticks })}>Cancel</Button>
+            <Button variant="primary" onClick={saveSpotGuard}>Save</Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card style={{ marginBottom: 10 }}>
+        <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 14.5 }}>Spot Velocity Guard</div>
+        <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Toggle checked={!!velocityGuard.active} onChange={active => setVelocityGuard({ ...velocityGuard, active })} label="Enable Spot Velocity Guard" />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <NumberField label="% Change" placeholder="e.g. 1.5" disabled={!velocityGuard.active}
+              value={velocityGuard.pct} onChange={pct => setVelocityGuard({ ...velocityGuard, pct })} />
+            <NumberField label="Time Window (min)" placeholder="e.g. 15" disabled={!velocityGuard.active}
+              value={velocityGuard.minutes} onChange={minutes => setVelocityGuard({ ...velocityGuard, minutes })} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => setVelocityGuard({ active: rm.velocity_guard_active, pct: rm.velocity_pct, minutes: rm.velocity_minutes })}>Cancel</Button>
+            <Button variant="primary" onClick={saveVelocityGuard}>Save</Button>
+          </div>
+        </div>
+      </Card>
 
       <Card style={{ marginBottom: 10 }}>
         <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 14.5 }}>Profit Shield</div>

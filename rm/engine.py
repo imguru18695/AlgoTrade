@@ -36,6 +36,7 @@ def reset_basket(basket_id: int):
         return
     s["pt_checks"] = 0
     s["lg_checks"] = 0
+    s["spot_range_checks"] = 0
 
 
 def rearm_basket(basket_id: int):
@@ -59,6 +60,7 @@ def _fresh_state() -> dict:
         "fired":     False,  # True once exit orders are placed
         "pt_checks": 0,      # consecutive 5-sec checks above PT threshold
         "lg_checks": 0,      # consecutive 5-sec checks below LG threshold
+        "spot_range_checks": 0,  # consecutive ticks outside the spot range limits
         "peak_pnl":  None,   # High-water mark P&L since last rearm
         "event_id":  None,   # exit_events row id — reused on retries to avoid duplicate log entries
     }
@@ -92,6 +94,24 @@ def _past_eod_time() -> bool:
     return _now_ist() >= EOD_EXIT_TIME
 
 
+# Checked longest-prefix-first only because it reads clearer that way — none
+# of these names actually collide as string prefixes of one another.
+_UNDERLYING_PREFIXES = ("BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTY", "SENSEX")
+
+
+def _detect_underlying(positions: list[dict]) -> str | None:
+    """Best-effort index a basket's option legs belong to, parsed from the
+    first leg's tradingsymbol prefix. None for a basket with no positions or
+    whose legs don't match a known index (equity/commodity, or an index spot
+    prices aren't fetched for yet) — spot guards simply don't apply there."""
+    for p in positions:
+        sym = p.get("tradingsymbol", "")
+        for prefix in _UNDERLYING_PREFIXES:
+            if sym.startswith(prefix):
+                return prefix
+    return None
+
+
 def compute_basket_pnl(
     positions: list[dict],
     ltp_fn: Callable[[int], float | None],
@@ -118,6 +138,8 @@ async def _check_basket(
     ltp_fn: Callable[[int], float | None],
     no_ltp_fn: Callable[[], None] | None,
     delete_basket_fn: Callable[[int], None] | None = None,
+    spot_fn: Callable[[str], float | None] | None = None,
+    spot_history_fn: Callable[[str, int], float | None] | None = None,
 ):
     """Evaluate one basket's RM rules for a single tick. Fires exit if needed.
     Runs concurrently with other baskets — one basket's long exit does not block others.
@@ -129,8 +151,8 @@ async def _check_basket(
     if not positions:
         return
 
-    if not any([rm.get("pt_active"), rm.get("lg_active"),
-                rm.get("ps_active"), rm.get("eod_exit")]):
+    if not any([rm.get("pt_active"), rm.get("lg_active"), rm.get("ps_active"),
+                rm.get("eod_exit"), rm.get("spot_guard_active"), rm.get("velocity_guard_active")]):
         return
 
     # Check market hours inside each basket task so a long exit on basket N
@@ -176,6 +198,43 @@ async def _check_basket(
     if rm.get("eod_exit") and _past_eod_time():
         _spawn_fire("EOD auto-exit at 3:25 PM", is_eod=True)
         return
+
+    # ── Spot Range Guard — reacts to the underlying, not MTM noise ────
+    # A short confirm-tick window (like PT/LG) filters a single bad print;
+    # unlike PT/LG this is never gated on live option LTPs being available,
+    # only on the index spot itself, so it stays meaningful even if a
+    # leg's own quote is temporarily stale.
+    if rm.get("spot_guard_active") and rm.get("spot_lower") is not None and rm.get("spot_upper") is not None:
+        underlying = _detect_underlying(positions)
+        spot = spot_fn(underlying) if underlying and spot_fn else None
+        if spot is not None:
+            if spot <= rm["spot_lower"] or spot >= rm["spot_upper"]:
+                needed = rm.get("spot_guard_ticks") or 2
+                state["spot_range_checks"] += 1
+                logger.info(f"Basket {bid}: Spot Range check {state['spot_range_checks']}/{needed}, "
+                            f"{underlying}=₹{spot:,.2f}")
+                if state["spot_range_checks"] >= needed:
+                    _spawn_fire(f"Spot Range breached: {underlying} at {spot:,.2f} "
+                                f"(limits {rm['spot_lower']:,.0f}–{rm['spot_upper']:,.0f})")
+                    return
+            else:
+                if state["spot_range_checks"] > 0:
+                    logger.debug(f"Basket {bid}: Spot Range check reset (back inside limits)")
+                state["spot_range_checks"] = 0
+
+    # ── Spot Velocity Guard — a fast move, even one that stays inside the
+    # range above, is the "sudden movement" case a static range can't catch.
+    # No confirm-ticks here: the N-minute window is itself the time filter.
+    if rm.get("velocity_guard_active") and rm.get("velocity_pct") and rm.get("velocity_minutes"):
+        underlying = _detect_underlying(positions)
+        spot_now = spot_fn(underlying) if underlying and spot_fn else None
+        spot_then = spot_history_fn(underlying, rm["velocity_minutes"]) if underlying and spot_history_fn else None
+        if spot_now is not None and spot_then:
+            pct_change = abs(spot_now - spot_then) / spot_then * 100
+            if pct_change >= rm["velocity_pct"]:
+                _spawn_fire(f"Spot Velocity: {underlying} moved {pct_change:.2f}% in "
+                            f"{rm['velocity_minutes']}min (limit {rm['velocity_pct']}%)")
+                return
 
     # ── Profit Target (takes priority over Profit Shield) ────────────
     if rm.get("pt_active") and rm.get("pt_inr"):
@@ -241,6 +300,8 @@ async def run_engine(
     exit_fn: Callable[[int, list, str], None],
     delete_basket_fn: Callable[[int], None] | None = None,
     no_ltp_fn: Callable[[], None] | None = None,
+    spot_fn: Callable[[str], float | None] | None = None,
+    spot_history_fn: Callable[[str, int], float | None] | None = None,
 ):
     """
     Main engine loop. Start as an asyncio background task:
@@ -250,11 +311,15 @@ async def run_engine(
     does not delay RM evaluation for other baskets.
 
     Args:
-        get_baskets_fn: () -> list of basket dicts, each with keys:
+        get_baskets_fn:  () -> list of basket dicts, each with keys:
                          id, rm (dict), positions (list of position dicts)
-        ltp_fn:         (instrument_token: int) -> float | None
-        exit_fn:        async (basket_id, open_positions, reason) -> None
-        no_ltp_fn:      optional callback when LTP is unavailable
+        ltp_fn:          (instrument_token: int) -> float | None
+        exit_fn:         async (basket_id, open_positions, reason) -> None
+        no_ltp_fn:       optional callback when LTP is unavailable
+        spot_fn:         optional (underlying: str) -> float | None, current index spot
+        spot_history_fn: optional (underlying: str, minutes: int) -> float | None,
+                         spot from ~N minutes ago. Both unused unless a basket
+                         enables Spot Range/Velocity Guard.
     """
     logger.info("RM engine started.")
     while True:
@@ -272,16 +337,18 @@ async def run_engine(
         # Fire each basket check as an independent background task so one basket's
         # multi-second LIMIT exit does not delay RM evaluation for all other baskets.
         for b in baskets:
-            task = asyncio.create_task(_check_basket_safe(b, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn))
+            task = asyncio.create_task(_check_basket_safe(
+                b, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn, spot_fn, spot_history_fn))
             _active_fires.add(task)
             task.add_done_callback(_active_fires.discard)
 
 
-async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn=None):
+async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn=None,
+                              spot_fn=None, spot_history_fn=None):
     """Wrapper that catches all exceptions so a failed basket check never silently
     kills the background task without a traceback."""
     try:
-        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn)
+        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn, spot_fn, spot_history_fn)
     except asyncio.CancelledError:
         raise
     except Exception as e:

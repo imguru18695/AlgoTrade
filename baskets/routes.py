@@ -70,6 +70,33 @@ async def save_profit_shield(
     return RedirectResponse(url="/management", status_code=302)
 
 
+@router.post("/{basket_id}/rm/spot-guard")
+async def save_spot_guard(
+    basket_id: int,
+    active: Optional[str] = Form(default=None),
+    lower: Optional[float] = Form(default=None),
+    upper: Optional[float] = Form(default=None),
+    ticks: Optional[str] = Form(default=None),
+):
+    ticks_int = int(ticks) if ticks and ticks.strip() else None
+    service.save_rm_spot_guard(basket_id, active == "1", lower, upper, ticks_int)
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@router.post("/{basket_id}/rm/velocity-guard")
+async def save_velocity_guard(
+    basket_id: int,
+    active: Optional[str] = Form(default=None),
+    pct: Optional[float] = Form(default=None),
+    minutes: Optional[str] = Form(default=None),
+):
+    minutes_int = int(minutes) if minutes and minutes.strip() else None
+    service.save_rm_velocity_guard(basket_id, active == "1", pct, minutes_int)
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
 @router.post("/{basket_id}/rearm")
 async def rearm(basket_id: int):
     rearm_basket(basket_id)

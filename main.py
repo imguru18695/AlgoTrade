@@ -194,6 +194,11 @@ async def lifespan(app: FastAPI):
 
     _keep(asyncio.create_task(_refresh_loop()))
 
+    from market import spot_cache
+    _keep(asyncio.create_task(spot_cache.refresh_loop(
+        get_kite_fn=lambda: get_kite() if load_token() else None
+    )))
+
     # Auto-assign filled execution orders to their target basket
     async def _exec_assign_fn(basket_id: int, tradingsymbol: str, exchange: str, product: str):
         try:
@@ -217,6 +222,8 @@ async def lifespan(app: FastAPI):
         exit_fn=_exit_fn,
         delete_basket_fn=_delete_basket_fn,
         no_ltp_fn=lambda: logging.warning("RM engine: no live prices available."),
+        spot_fn=spot_cache.get_spot,
+        spot_history_fn=spot_cache.get_spot_n_min_ago,
     )))
     yield
     # Cancel background tasks BEFORE stopping the ticker — otherwise _refresh_loop

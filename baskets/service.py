@@ -151,3 +151,29 @@ def save_rm_profit_shield(basket_id: int, active: bool, trigger: float | None,
                 ps_step_profit=excluded.ps_step_profit,
                 ps_step_lock=excluded.ps_step_lock
         """, (basket_id, int(active), trigger, lock, step_profit, step_lock))
+
+
+def save_rm_spot_guard(basket_id: int, active: bool, lower: float | None,
+                        upper: float | None, ticks: int | None):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO basket_rm (basket_id, spot_guard_active, spot_lower, spot_upper, spot_guard_ticks)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(basket_id) DO UPDATE SET
+                spot_guard_active=excluded.spot_guard_active,
+                spot_lower=excluded.spot_lower,
+                spot_upper=excluded.spot_upper,
+                spot_guard_ticks=excluded.spot_guard_ticks
+        """, (basket_id, int(active), lower, upper, ticks))
+
+
+def save_rm_velocity_guard(basket_id: int, active: bool, pct: float | None, minutes: int | None):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO basket_rm (basket_id, velocity_guard_active, velocity_pct, velocity_minutes)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(basket_id) DO UPDATE SET
+                velocity_guard_active=excluded.velocity_guard_active,
+                velocity_pct=excluded.velocity_pct,
+                velocity_minutes=excluded.velocity_minutes
+        """, (basket_id, int(active), pct, minutes))

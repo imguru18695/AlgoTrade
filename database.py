@@ -30,6 +30,13 @@ def init_db():
             "ALTER TABLE basket_rm ADD COLUMN eod_exit INTEGER DEFAULT 0",
             "ALTER TABLE baskets ADD COLUMN order_type TEXT DEFAULT 'LIMIT'",
             "ALTER TABLE basket_rm ADD COLUMN delete_on_fire INTEGER DEFAULT 1",
+            "ALTER TABLE basket_rm ADD COLUMN spot_guard_active INTEGER DEFAULT 0",
+            "ALTER TABLE basket_rm ADD COLUMN spot_lower REAL",
+            "ALTER TABLE basket_rm ADD COLUMN spot_upper REAL",
+            "ALTER TABLE basket_rm ADD COLUMN spot_guard_ticks INTEGER",
+            "ALTER TABLE basket_rm ADD COLUMN velocity_guard_active INTEGER DEFAULT 0",
+            "ALTER TABLE basket_rm ADD COLUMN velocity_pct REAL",
+            "ALTER TABLE basket_rm ADD COLUMN velocity_minutes INTEGER",
         ]:
             try:
                 conn.execute(migration)
@@ -126,7 +133,16 @@ def init_db():
                 -- EOD auto-exit
                 eod_exit        INTEGER DEFAULT 0,
                 -- Auto-delete basket after RM fires
-                delete_on_fire  INTEGER DEFAULT 1
+                delete_on_fire  INTEGER DEFAULT 1,
+                -- Spot Range Guard
+                spot_guard_active     INTEGER DEFAULT 0,
+                spot_lower            REAL,
+                spot_upper            REAL,
+                spot_guard_ticks      INTEGER,
+                -- Spot Velocity Guard
+                velocity_guard_active INTEGER DEFAULT 0,
+                velocity_pct          REAL,
+                velocity_minutes      INTEGER
             );
         """)
         conn.commit()

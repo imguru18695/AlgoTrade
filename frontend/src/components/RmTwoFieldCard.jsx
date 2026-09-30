@@ -15,7 +15,7 @@ export default function RmTwoFieldCard({
         <div style={{ display: 'flex', gap: 10 }}>
           <NumberField label={f1Label} placeholder={f1Placeholder} disabled={!draft.active}
             value={draft.inr} onChange={inr => onChange({ ...draft, inr })} />
-          <NumberField label="Confirm Checks" hint="× 5 sec each" placeholder="e.g. 5 = holds for 25s" disabled={!draft.active}
+          <NumberField label="Confirm Checks" hint="× 1 sec each" placeholder="e.g. 5 = holds for 5s" disabled={!draft.active}
             value={draft.ticks} onChange={ticks => onChange({ ...draft, ticks })} />
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

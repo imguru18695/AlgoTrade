@@ -365,6 +365,8 @@ def _empty_rm() -> dict:
         "ps_step_profit": None, "ps_step_lock": None,
         "eod_exit": False,
         "delete_on_fire": 1,
+        "spot_guard_active": False, "spot_lower": None, "spot_upper": None, "spot_guard_ticks": None,
+        "velocity_guard_active": False, "velocity_pct": None, "velocity_minutes": None,
     }
 
 
@@ -726,6 +728,29 @@ async def save_lg(basket_id: int, request: Request):
     rm["lg_active"] = form.get("active") == "1"
     rm["lg_inr"]    = float(form["inr"])   if form.get("inr")   else None
     rm["lg_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@app.post("/baskets/{basket_id}/rm/spot-guard")
+async def save_spot_guard(basket_id: int, request: Request):
+    form = await request.form()
+    rm = _rm.setdefault(basket_id, _empty_rm())
+    rm["spot_guard_active"] = form.get("active") == "1"
+    rm["spot_lower"]        = float(form["lower"]) if form.get("lower") else None
+    rm["spot_upper"]        = float(form["upper"]) if form.get("upper") else None
+    rm["spot_guard_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@app.post("/baskets/{basket_id}/rm/velocity-guard")
+async def save_velocity_guard(basket_id: int, request: Request):
+    form = await request.form()
+    rm = _rm.setdefault(basket_id, _empty_rm())
+    rm["velocity_guard_active"] = form.get("active") == "1"
+    rm["velocity_pct"]          = float(form["pct"])     if form.get("pct")     else None
+    rm["velocity_minutes"]      = int(form["minutes"])   if form.get("minutes") else None
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
