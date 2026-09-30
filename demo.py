@@ -372,6 +372,11 @@ def _empty_rm() -> dict:
 
 def _make_pos(tradingsymbol, exchange, product, quantity, average_price,
               last_price, instrument_token, multiplier=1):
+    # Demo positions are seeded directly in lots (see _POSITIONS/_UNDERLYINGS
+    # below), with `multiplier` standing in for the lot size to get realistic
+    # notional P&L - unlike the real kite/positions.py, where `quantity` is
+    # always raw units and lot count has to be looked up from Kite's
+    # instrument master. So here, quantity IS the lots value already.
     pnl = (last_price - average_price) * quantity * multiplier
     cost = abs(average_price) * abs(quantity) * multiplier
     return {
@@ -379,6 +384,7 @@ def _make_pos(tradingsymbol, exchange, product, quantity, average_price,
         "exchange": exchange,
         "product": product,
         "quantity": quantity,
+        "lots": quantity if multiplier > 1 else None,
         "average_price": average_price,
         "last_price": last_price,
         "pnl": pnl,

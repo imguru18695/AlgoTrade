@@ -1,4 +1,5 @@
 from kite.client import get_kite
+from instruments import lots_of
 
 
 def fetch_positions() -> list[dict]:
@@ -29,6 +30,7 @@ def fetch_positions() -> list[dict]:
             "instrument_token": p.get("instrument_token"),
             "product":          p["product"],
             "quantity":         quantity,
+            "lots":             lots_of(p["tradingsymbol"], p["exchange"], quantity, kite),
             "average_price":    buy_price,
             "last_price":       last_price,
             "pnl":              pnl,

@@ -38,7 +38,10 @@ export default function PositionsTable({ positions, pnlPositions, showProduct, s
               <td style={td}><input type="checkbox" checked={selected.has(key)} onChange={() => onToggle(key)} aria-label={`Select ${p.tradingsymbol}`} /></td>
               <td style={td}>{p.tradingsymbol}<br /><span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.exchange}</span></td>
               {showProduct && <td style={td}>{p.product}</td>}
-              <td style={{ ...td, color: p.quantity > 0 ? 'var(--up)' : 'var(--down)' }} className="mono">{p.quantity > 0 ? '+' : ''}{p.quantity}</td>
+              <td style={{ ...td, color: p.quantity > 0 ? 'var(--up)' : 'var(--down)' }} className="mono">
+                {p.quantity > 0 ? '+' : ''}{p.quantity}
+                {p.lots != null && <><br /><span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.lots > 0 ? '+' : ''}{p.lots} lot{Math.abs(p.lots) !== 1 ? 's' : ''}</span></>}
+              </td>
               <td style={td} className="mono">{n2(p.average_price)}</td>
               <td style={td} className="mono">{n2(ltp)}</td>
               <td style={{ ...td, textAlign: 'right' }}>
