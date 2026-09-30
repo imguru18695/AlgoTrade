@@ -359,14 +359,16 @@ def render(name: str, ctx: dict) -> HTMLResponse:
 
 def _empty_rm() -> dict:
     return {
-        "pt_active": False, "pt_inr": None, "pt_ticks": None,
-        "lg_active": False, "lg_inr": None, "lg_ticks": None,
+        "pt_active": False, "pt_inr": None, "pt_ticks": None, "pt_qty_pct": 100,
+        "lg_active": False, "lg_inr": None, "lg_ticks": None, "lg_qty_pct": 100,
         "ps_active": False, "ps_trigger": None, "ps_lock": None,
-        "ps_step_profit": None, "ps_step_lock": None,
+        "ps_step_profit": None, "ps_step_lock": None, "ps_ticks": None, "ps_qty_pct": 100,
         "eod_exit": False,
         "delete_on_fire": 1,
-        "spot_guard_active": False, "spot_lower": None, "spot_upper": None, "spot_guard_ticks": None,
-        "velocity_guard_active": False, "velocity_pct": None, "velocity_minutes": None,
+        "spot_guard_active": False, "spot_lower": None, "spot_upper": None, "spot_guard_ticks": None, "spot_guard_qty_pct": 100,
+        "velocity_guard_active": False, "velocity_pct": None, "velocity_minutes": None, "velocity_guard_qty_pct": 100,
+        "hard_pt_active": False, "hard_pt_inr": None, "hard_pt_ticks": None, "hard_pt_qty_pct": 100,
+        "hard_lg_active": False, "hard_lg_inr": None, "hard_lg_ticks": None, "hard_lg_qty_pct": 100,
     }
 
 
@@ -728,6 +730,11 @@ async def rearm(basket_id: int):
     return RedirectResponse(url="/management", status_code=302)
 
 
+def _qty_pct(form) -> int:
+    raw = form.get("qty_pct")
+    return int(raw) if raw and str(raw).strip() else 100
+
+
 @app.post("/baskets/{basket_id}/rm/profit-target")
 async def save_pt(basket_id: int, request: Request):
     form = await request.form()
@@ -735,6 +742,7 @@ async def save_pt(basket_id: int, request: Request):
     rm["pt_active"] = form.get("active") == "1"
     rm["pt_inr"]    = float(form["inr"])   if form.get("inr")   else None
     rm["pt_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    rm["pt_qty_pct"] = _qty_pct(form)
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -746,6 +754,31 @@ async def save_lg(basket_id: int, request: Request):
     rm["lg_active"] = form.get("active") == "1"
     rm["lg_inr"]    = float(form["inr"])   if form.get("inr")   else None
     rm["lg_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    rm["lg_qty_pct"] = _qty_pct(form)
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@app.post("/baskets/{basket_id}/rm/hard-profit-target")
+async def save_hard_pt(basket_id: int, request: Request):
+    form = await request.form()
+    rm = _rm.setdefault(basket_id, _empty_rm())
+    rm["hard_pt_active"] = form.get("active") == "1"
+    rm["hard_pt_inr"]    = float(form["inr"])   if form.get("inr")   else None
+    rm["hard_pt_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    rm["hard_pt_qty_pct"] = _qty_pct(form)
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@app.post("/baskets/{basket_id}/rm/hard-loss-guard")
+async def save_hard_lg(basket_id: int, request: Request):
+    form = await request.form()
+    rm = _rm.setdefault(basket_id, _empty_rm())
+    rm["hard_lg_active"] = form.get("active") == "1"
+    rm["hard_lg_inr"]    = float(form["inr"])   if form.get("inr")   else None
+    rm["hard_lg_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    rm["hard_lg_qty_pct"] = _qty_pct(form)
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -758,6 +791,7 @@ async def save_spot_guard(basket_id: int, request: Request):
     rm["spot_lower"]        = float(form["lower"]) if form.get("lower") else None
     rm["spot_upper"]        = float(form["upper"]) if form.get("upper") else None
     rm["spot_guard_ticks"]  = int(form["ticks"])   if form.get("ticks") else None
+    rm["spot_guard_qty_pct"] = _qty_pct(form)
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -769,6 +803,7 @@ async def save_velocity_guard(basket_id: int, request: Request):
     rm["velocity_guard_active"] = form.get("active") == "1"
     rm["velocity_pct"]          = float(form["pct"])     if form.get("pct")     else None
     rm["velocity_minutes"]      = int(form["minutes"])   if form.get("minutes") else None
+    rm["velocity_guard_qty_pct"] = _qty_pct(form)
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -782,6 +817,8 @@ async def save_ps(basket_id: int, request: Request):
     rm["ps_lock"]        = float(form["lock"])        if form.get("lock")        else None
     rm["ps_step_profit"] = float(form["step_profit"]) if form.get("step_profit") else None
     rm["ps_step_lock"]   = float(form["step_lock"])   if form.get("step_lock")   else None
+    rm["ps_ticks"]       = int(form["ticks"])         if form.get("ticks")       else None
+    rm["ps_qty_pct"]     = _qty_pct(form)
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 

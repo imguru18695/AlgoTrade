@@ -127,28 +127,56 @@ def get_rm(basket_id: int) -> dict:
     return dict(row) if row else {}
 
 
-def save_rm_profit_target(basket_id: int, active: bool, inr: float | None, ticks: int | None):
+def save_rm_profit_target(basket_id: int, active: bool, inr: float | None, ticks: int | None, qty_pct: int | None = 100):
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO basket_rm (basket_id, pt_active, pt_inr, pt_ticks)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO basket_rm (basket_id, pt_active, pt_inr, pt_ticks, pt_qty_pct)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(basket_id) DO UPDATE SET
                 pt_active=excluded.pt_active,
                 pt_inr=excluded.pt_inr,
-                pt_ticks=excluded.pt_ticks
-        """, (basket_id, int(active), inr, ticks))
+                pt_ticks=excluded.pt_ticks,
+                pt_qty_pct=excluded.pt_qty_pct
+        """, (basket_id, int(active), inr, ticks, qty_pct or 100))
 
 
-def save_rm_loss_guard(basket_id: int, active: bool, inr: float | None, ticks: int | None):
+def save_rm_loss_guard(basket_id: int, active: bool, inr: float | None, ticks: int | None, qty_pct: int | None = 100):
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO basket_rm (basket_id, lg_active, lg_inr, lg_ticks)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO basket_rm (basket_id, lg_active, lg_inr, lg_ticks, lg_qty_pct)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(basket_id) DO UPDATE SET
                 lg_active=excluded.lg_active,
                 lg_inr=excluded.lg_inr,
-                lg_ticks=excluded.lg_ticks
-        """, (basket_id, int(active), inr, ticks))
+                lg_ticks=excluded.lg_ticks,
+                lg_qty_pct=excluded.lg_qty_pct
+        """, (basket_id, int(active), inr, ticks, qty_pct or 100))
+
+
+def save_rm_hard_pt(basket_id: int, active: bool, inr: float | None, ticks: int | None, qty_pct: int | None = 100):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO basket_rm (basket_id, hard_pt_active, hard_pt_inr, hard_pt_ticks, hard_pt_qty_pct)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(basket_id) DO UPDATE SET
+                hard_pt_active=excluded.hard_pt_active,
+                hard_pt_inr=excluded.hard_pt_inr,
+                hard_pt_ticks=excluded.hard_pt_ticks,
+                hard_pt_qty_pct=excluded.hard_pt_qty_pct
+        """, (basket_id, int(active), inr, ticks, qty_pct or 100))
+
+
+def save_rm_hard_lg(basket_id: int, active: bool, inr: float | None, ticks: int | None, qty_pct: int | None = 100):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO basket_rm (basket_id, hard_lg_active, hard_lg_inr, hard_lg_ticks, hard_lg_qty_pct)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(basket_id) DO UPDATE SET
+                hard_lg_active=excluded.hard_lg_active,
+                hard_lg_inr=excluded.hard_lg_inr,
+                hard_lg_ticks=excluded.hard_lg_ticks,
+                hard_lg_qty_pct=excluded.hard_lg_qty_pct
+        """, (basket_id, int(active), inr, ticks, qty_pct or 100))
 
 
 def save_delete_on_fire(basket_id: int, enabled: bool):
@@ -170,41 +198,46 @@ def save_eod_exit(basket_id: int, enabled: bool):
 
 
 def save_rm_profit_shield(basket_id: int, active: bool, trigger: float | None,
-                           lock: float | None, step_profit: float | None, step_lock: float | None):
+                           lock: float | None, step_profit: float | None, step_lock: float | None,
+                           ticks: int | None = None, qty_pct: int | None = 100):
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO basket_rm (basket_id, ps_active, ps_trigger, ps_lock, ps_step_profit, ps_step_lock)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO basket_rm (basket_id, ps_active, ps_trigger, ps_lock, ps_step_profit, ps_step_lock, ps_ticks, ps_qty_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(basket_id) DO UPDATE SET
                 ps_active=excluded.ps_active,
                 ps_trigger=excluded.ps_trigger,
                 ps_lock=excluded.ps_lock,
                 ps_step_profit=excluded.ps_step_profit,
-                ps_step_lock=excluded.ps_step_lock
-        """, (basket_id, int(active), trigger, lock, step_profit, step_lock))
+                ps_step_lock=excluded.ps_step_lock,
+                ps_ticks=excluded.ps_ticks,
+                ps_qty_pct=excluded.ps_qty_pct
+        """, (basket_id, int(active), trigger, lock, step_profit, step_lock, ticks, qty_pct or 100))
 
 
 def save_rm_spot_guard(basket_id: int, active: bool, lower: float | None,
-                        upper: float | None, ticks: int | None):
+                        upper: float | None, ticks: int | None, qty_pct: int | None = 100):
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO basket_rm (basket_id, spot_guard_active, spot_lower, spot_upper, spot_guard_ticks)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO basket_rm (basket_id, spot_guard_active, spot_lower, spot_upper, spot_guard_ticks, spot_guard_qty_pct)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(basket_id) DO UPDATE SET
                 spot_guard_active=excluded.spot_guard_active,
                 spot_lower=excluded.spot_lower,
                 spot_upper=excluded.spot_upper,
-                spot_guard_ticks=excluded.spot_guard_ticks
-        """, (basket_id, int(active), lower, upper, ticks))
+                spot_guard_ticks=excluded.spot_guard_ticks,
+                spot_guard_qty_pct=excluded.spot_guard_qty_pct
+        """, (basket_id, int(active), lower, upper, ticks, qty_pct or 100))
 
 
-def save_rm_velocity_guard(basket_id: int, active: bool, pct: float | None, minutes: int | None):
+def save_rm_velocity_guard(basket_id: int, active: bool, pct: float | None, minutes: int | None, qty_pct: int | None = 100):
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO basket_rm (basket_id, velocity_guard_active, velocity_pct, velocity_minutes)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO basket_rm (basket_id, velocity_guard_active, velocity_pct, velocity_minutes, velocity_guard_qty_pct)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(basket_id) DO UPDATE SET
                 velocity_guard_active=excluded.velocity_guard_active,
                 velocity_pct=excluded.velocity_pct,
-                velocity_minutes=excluded.velocity_minutes
-        """, (basket_id, int(active), pct, minutes))
+                velocity_minutes=excluded.velocity_minutes,
+                velocity_guard_qty_pct=excluded.velocity_guard_qty_pct
+        """, (basket_id, int(active), pct, minutes, qty_pct or 100))

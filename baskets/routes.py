@@ -31,15 +31,20 @@ async def delete_basket(basket_id: int):
     return RedirectResponse(url="/management", status_code=302)
 
 
+def _qty_pct(raw: Optional[str]) -> int:
+    return int(raw) if raw and raw.strip() else 100
+
+
 @router.post("/{basket_id}/rm/profit-target")
 async def save_profit_target(
     basket_id: int,
     active: Optional[str] = Form(default=None),
     inr: Optional[float] = Form(default=None),
     ticks: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
 ):
     ticks_int = int(ticks) if ticks and ticks.strip() else None
-    service.save_rm_profit_target(basket_id, active == "1", inr, ticks_int)
+    service.save_rm_profit_target(basket_id, active == "1", inr, ticks_int, _qty_pct(qty_pct))
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -50,9 +55,38 @@ async def save_loss_guard(
     active: Optional[str] = Form(default=None),
     inr: Optional[float] = Form(default=None),
     ticks: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
 ):
     ticks_int = int(ticks) if ticks and ticks.strip() else None
-    service.save_rm_loss_guard(basket_id, active == "1", inr, ticks_int)
+    service.save_rm_loss_guard(basket_id, active == "1", inr, ticks_int, _qty_pct(qty_pct))
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@router.post("/{basket_id}/rm/hard-profit-target")
+async def save_hard_profit_target(
+    basket_id: int,
+    active: Optional[str] = Form(default=None),
+    inr: Optional[float] = Form(default=None),
+    ticks: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
+):
+    ticks_int = int(ticks) if ticks and ticks.strip() else None
+    service.save_rm_hard_pt(basket_id, active == "1", inr, ticks_int, _qty_pct(qty_pct))
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@router.post("/{basket_id}/rm/hard-loss-guard")
+async def save_hard_loss_guard(
+    basket_id: int,
+    active: Optional[str] = Form(default=None),
+    inr: Optional[float] = Form(default=None),
+    ticks: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
+):
+    ticks_int = int(ticks) if ticks and ticks.strip() else None
+    service.save_rm_hard_lg(basket_id, active == "1", inr, ticks_int, _qty_pct(qty_pct))
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -65,8 +99,12 @@ async def save_profit_shield(
     lock: Optional[float] = Form(default=None),
     step_profit: Optional[float] = Form(default=None),
     step_lock: Optional[float] = Form(default=None),
+    ticks: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
 ):
-    service.save_rm_profit_shield(basket_id, active == "1", trigger, lock, step_profit, step_lock)
+    ticks_int = int(ticks) if ticks and ticks.strip() else None
+    service.save_rm_profit_shield(basket_id, active == "1", trigger, lock, step_profit, step_lock,
+                                   ticks_int, _qty_pct(qty_pct))
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -78,9 +116,10 @@ async def save_spot_guard(
     lower: Optional[float] = Form(default=None),
     upper: Optional[float] = Form(default=None),
     ticks: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
 ):
     ticks_int = int(ticks) if ticks and ticks.strip() else None
-    service.save_rm_spot_guard(basket_id, active == "1", lower, upper, ticks_int)
+    service.save_rm_spot_guard(basket_id, active == "1", lower, upper, ticks_int, _qty_pct(qty_pct))
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
@@ -91,9 +130,10 @@ async def save_velocity_guard(
     active: Optional[str] = Form(default=None),
     pct: Optional[float] = Form(default=None),
     minutes: Optional[str] = Form(default=None),
+    qty_pct: Optional[str] = Form(default=None),
 ):
     minutes_int = int(minutes) if minutes and minutes.strip() else None
-    service.save_rm_velocity_guard(basket_id, active == "1", pct, minutes_int)
+    service.save_rm_velocity_guard(basket_id, active == "1", pct, minutes_int, _qty_pct(qty_pct))
     reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 

@@ -37,6 +37,32 @@ def init_db():
             "ALTER TABLE basket_rm ADD COLUMN velocity_guard_active INTEGER DEFAULT 0",
             "ALTER TABLE basket_rm ADD COLUMN velocity_pct REAL",
             "ALTER TABLE basket_rm ADD COLUMN velocity_minutes INTEGER",
+            # Qty % per check (25/50/75/100) — captured for every check so a
+            # partial-exit size can be configured, but NOT YET wired into
+            # _fire()'s order sizing (rm/engine.py still exits 100% of the
+            # basket regardless). Defaults to 100 so existing baskets keep
+            # today's exact behavior until the per-check partial-exit logic
+            # is specified and this is actually wired up.
+            "ALTER TABLE basket_rm ADD COLUMN pt_qty_pct INTEGER DEFAULT 100",
+            "ALTER TABLE basket_rm ADD COLUMN lg_qty_pct INTEGER DEFAULT 100",
+            "ALTER TABLE basket_rm ADD COLUMN ps_qty_pct INTEGER DEFAULT 100",
+            "ALTER TABLE basket_rm ADD COLUMN spot_guard_qty_pct INTEGER DEFAULT 100",
+            "ALTER TABLE basket_rm ADD COLUMN velocity_guard_qty_pct INTEGER DEFAULT 100",
+            # Profit Shield confirm-ticks — PS previously fired the instant pnl
+            # dropped below the floor, no debounce at all (unlike PT/LG). Adding
+            # this so it can be desensitized to a single bad print the same way.
+            "ALTER TABLE basket_rm ADD COLUMN ps_ticks INTEGER",
+            # Hard Exits (Not time bound) — a second, independent Target
+            # Profit / Loss Guard pair, separate from the P&L Checks tab's
+            # pt_*/lg_* above. Same mechanics (confirm-ticks, 100% exit).
+            "ALTER TABLE basket_rm ADD COLUMN hard_pt_active INTEGER DEFAULT 0",
+            "ALTER TABLE basket_rm ADD COLUMN hard_pt_inr REAL",
+            "ALTER TABLE basket_rm ADD COLUMN hard_pt_ticks INTEGER",
+            "ALTER TABLE basket_rm ADD COLUMN hard_pt_qty_pct INTEGER DEFAULT 100",
+            "ALTER TABLE basket_rm ADD COLUMN hard_lg_active INTEGER DEFAULT 0",
+            "ALTER TABLE basket_rm ADD COLUMN hard_lg_inr REAL",
+            "ALTER TABLE basket_rm ADD COLUMN hard_lg_ticks INTEGER",
+            "ALTER TABLE basket_rm ADD COLUMN hard_lg_qty_pct INTEGER DEFAULT 100",
         ]:
             try:
                 conn.execute(migration)
@@ -120,16 +146,20 @@ def init_db():
                 pt_active       INTEGER DEFAULT 0,
                 pt_inr          REAL,
                 pt_ticks        INTEGER,
+                pt_qty_pct      INTEGER DEFAULT 100,
                 -- Loss Guard
                 lg_active       INTEGER DEFAULT 0,
                 lg_inr          REAL,
                 lg_ticks        INTEGER,
+                lg_qty_pct      INTEGER DEFAULT 100,
                 -- Profit Shield
                 ps_active       INTEGER DEFAULT 0,
                 ps_trigger      REAL,
                 ps_lock         REAL,
                 ps_step_profit  REAL,
                 ps_step_lock    REAL,
+                ps_ticks        INTEGER,
+                ps_qty_pct      INTEGER DEFAULT 100,
                 -- EOD auto-exit
                 eod_exit        INTEGER DEFAULT 0,
                 -- Auto-delete basket after RM fires
@@ -139,10 +169,21 @@ def init_db():
                 spot_lower            REAL,
                 spot_upper            REAL,
                 spot_guard_ticks      INTEGER,
+                spot_guard_qty_pct    INTEGER DEFAULT 100,
                 -- Spot Velocity Guard
                 velocity_guard_active INTEGER DEFAULT 0,
                 velocity_pct          REAL,
-                velocity_minutes      INTEGER
+                velocity_minutes      INTEGER,
+                velocity_guard_qty_pct INTEGER DEFAULT 100,
+                -- Hard Exits (Not time bound) — independent 2nd PT/LG pair
+                hard_pt_active  INTEGER DEFAULT 0,
+                hard_pt_inr     REAL,
+                hard_pt_ticks   INTEGER,
+                hard_pt_qty_pct INTEGER DEFAULT 100,
+                hard_lg_active  INTEGER DEFAULT 0,
+                hard_lg_inr     REAL,
+                hard_lg_ticks   INTEGER,
+                hard_lg_qty_pct INTEGER DEFAULT 100
             );
         """)
         conn.commit()

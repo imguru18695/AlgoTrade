@@ -1,8 +1,10 @@
-import { Card, Toggle, NumberField, Button } from './ui.jsx'
+import { Card, Toggle, NumberField, PctField, Button } from './ui.jsx'
 
 // Mirrors the old rm_2field_card Jinja macro — shared shape for Profit
-// Target and Loss Guard, which both have exactly one primary INR field plus
-// a "confirm ticks" field alongside the enable toggle.
+// Target, Loss Guard, and the Hard Exits tab's own Target/Loss pair, which
+// all have exactly one primary INR field plus a "confirm ticks" field
+// alongside the enable toggle, plus a Qty % (partial-exit size — captured
+// but not yet wired into actual order sizing, see rm/engine.py).
 export default function RmTwoFieldCard({
   title, f1Label, f1Placeholder, toggleLabel,
   draft, onChange, onSave, onCancel,
@@ -18,6 +20,7 @@ export default function RmTwoFieldCard({
           <NumberField label="Confirm Checks" hint="× 1 sec each" placeholder="e.g. 5 = holds for 5s" disabled={!draft.active}
             value={draft.ticks} onChange={ticks => onChange({ ...draft, ticks })} />
         </div>
+        <PctField value={draft.qtyPct} disabled={!draft.active} onChange={qtyPct => onChange({ ...draft, qtyPct })} />
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" onClick={onCancel}>Cancel</Button>
           <Button variant="primary" onClick={onSave}>Save</Button>

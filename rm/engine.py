@@ -38,7 +38,10 @@ def reset_basket(basket_id: int):
         return
     s["pt_checks"] = 0
     s["lg_checks"] = 0
+    s["ps_checks"] = 0
     s["spot_range_checks"] = 0
+    s["hard_pt_checks"] = 0
+    s["hard_lg_checks"] = 0
 
 
 def rearm_basket(basket_id: int):
@@ -62,7 +65,10 @@ def _fresh_state() -> dict:
         "fired":     False,  # True once exit orders are placed
         "pt_checks": 0,      # consecutive 5-sec checks above PT threshold
         "lg_checks": 0,      # consecutive 5-sec checks below LG threshold
+        "ps_checks": 0,      # consecutive ticks below the PS floor
         "spot_range_checks": 0,  # consecutive ticks outside the spot range limits
+        "hard_pt_checks": 0,     # consecutive ticks above the Hard Exit target
+        "hard_lg_checks": 0,     # consecutive ticks below the Hard Exit loss limit
         "peak_pnl":  None,   # High-water mark P&L since last rearm
         "event_id":  None,   # exit_events row id — reused on retries to avoid duplicate log entries
     }
@@ -151,7 +157,8 @@ async def _check_basket(
         return
 
     if not any([rm.get("pt_active"), rm.get("lg_active"), rm.get("ps_active"),
-                rm.get("eod_exit"), rm.get("spot_guard_active"), rm.get("velocity_guard_active")]):
+                rm.get("eod_exit"), rm.get("spot_guard_active"), rm.get("velocity_guard_active"),
+                rm.get("hard_pt_active"), rm.get("hard_lg_active")]):
         return
 
     # Check market hours inside each basket task so a long exit on basket N
@@ -287,10 +294,53 @@ async def _check_basket(
 
         # Only fire the floor check if PS was armed this trading day.
         # On day-2 open with an overnight preserved floor, an immediate gap-down
-        # must NOT fire — the position must re-reach ps_trigger first.
-        if state["ps_armed"] and state["floor"] is not None and pnl < state["floor"]:
-            _spawn_fire(f"Profit Shield floor ₹{state['floor']:,.0f} breached")
-            return
+        # must NOT fire — the position must re-reach ps_trigger first. The
+        # confirm-ticks debounce below only gates the FIRE decision, not the
+        # arm/step-up logic above — the floor still steps up immediately on
+        # every tick that earns it, same as before.
+        if state["ps_armed"] and state["floor"] is not None:
+            if pnl < state["floor"]:
+                needed = rm.get("ps_ticks") or 1
+                state["ps_checks"] += 1
+                logger.info(f"Basket {bid}: PS check {state['ps_checks']}/{needed}, "
+                            f"P&L=₹{pnl:,.0f} floor=₹{state['floor']:,.0f}")
+                if state["ps_checks"] >= needed:
+                    _spawn_fire(f"Profit Shield floor ₹{state['floor']:,.0f} breached")
+                    return
+            else:
+                if state["ps_checks"] > 0:
+                    logger.debug(f"Basket {bid}: PS check reset (P&L back above floor)")
+                state["ps_checks"] = 0
+
+    # ── Hard Exit Target Profit — independent of the regular Profit Target
+    # above (P&L Checks tab); a second, separate threshold that can run
+    # alongside or instead of it.
+    if rm.get("hard_pt_active") and rm.get("hard_pt_inr"):
+        if pnl >= rm["hard_pt_inr"]:
+            needed = rm.get("hard_pt_ticks") or 1
+            state["hard_pt_checks"] += 1
+            logger.info(f"Basket {bid}: Hard PT check {state['hard_pt_checks']}/{needed}, P&L=₹{pnl:,.0f}")
+            if state["hard_pt_checks"] >= needed:
+                _spawn_fire(f"Hard Exit Target Profit ₹{rm['hard_pt_inr']:,.0f} hit")
+                return
+        else:
+            if state["hard_pt_checks"] > 0:
+                logger.debug(f"Basket {bid}: Hard PT check reset (P&L dropped below target)")
+            state["hard_pt_checks"] = 0
+
+    # ── Hard Exit Loss Guard — independent of the regular Loss Guard above.
+    if rm.get("hard_lg_active") and rm.get("hard_lg_inr"):
+        if pnl <= -rm["hard_lg_inr"]:
+            needed = rm.get("hard_lg_ticks") or 1
+            state["hard_lg_checks"] += 1
+            logger.info(f"Basket {bid}: Hard LG check {state['hard_lg_checks']}/{needed}, P&L=₹{pnl:,.0f}")
+            if state["hard_lg_checks"] >= needed:
+                _spawn_fire(f"Hard Exit Loss Guard -₹{rm['hard_lg_inr']:,.0f} breached")
+                return
+        else:
+            if state["hard_lg_checks"] > 0:
+                logger.debug(f"Basket {bid}: Hard LG check reset (P&L recovered)")
+            state["hard_lg_checks"] = 0
 
 
 async def run_engine(

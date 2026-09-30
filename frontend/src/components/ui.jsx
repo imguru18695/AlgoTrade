@@ -56,6 +56,26 @@ export const NumberField = ({ label, hint, value, onChange, placeholder, disable
   </label>
 )
 
+// Fixed 25/50/75/100 choices, not a free-form number — the exit-sizing logic
+// behind this is still pending, so today it only captures the setting.
+export const PctField = ({ label = 'Qty %', value, onChange, disabled }) => (
+  <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 0 }}>
+    <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{label}</span>
+    <div style={{ display: 'flex', gap: 6 }}>
+      {[25, 50, 75, 100].map(p => (
+        <button key={p} type="button" disabled={disabled} onClick={() => onChange?.(p)}
+          style={{ flex: 1, padding: '8px 0', fontSize: 12.5, fontWeight: 600, borderRadius: 6,
+            cursor: disabled ? 'default' : 'pointer', opacity: disabled ? .45 : 1,
+            background: (value ?? 100) === p ? 'var(--teal-dim)' : 'transparent',
+            color: (value ?? 100) === p ? 'var(--teal)' : 'var(--muted)',
+            border: '1px solid ' + ((value ?? 100) === p ? 'var(--teal)' : 'var(--line-2)') }}>
+          {p}%
+        </button>
+      ))}
+    </div>
+  </label>
+)
+
 export const Button = ({ children, onClick, variant = 'ghost', type = 'button', disabled, style }) => {
   const variants = {
     primary: { background: 'var(--teal)', color: '#04231f', border: '1px solid var(--teal)' },
