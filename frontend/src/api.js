@@ -39,7 +39,17 @@ export async function postForm(url, fields = {}) {
     else fd.append(k, v)
   }
   const r = await fetch(url, { method: 'POST', body: fd, redirect: 'manual' })
-  if (r.type !== 'opaqueredirect' && !r.ok) throw new Error(`${url} ${r.status}`)
+  if (r.type !== 'opaqueredirect' && !r.ok) {
+    // A handled validation error (e.g. mixed-underlying) comes back as JSON
+    // with a human-readable `message` — surface that instead of a bare
+    // status code so the caller can show it directly.
+    let message = `${url} ${r.status}`
+    try {
+      const body = await r.json()
+      if (body?.message) message = body.message
+    } catch { /* not a JSON error body — keep the generic message */ }
+    throw new Error(message)
+  }
 }
 
 export async function fetchSession() {

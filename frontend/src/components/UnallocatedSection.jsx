@@ -48,7 +48,7 @@ export default function UnallocatedSection({ unallocated, baskets, pnlPositions,
           selected={selected} onToggle={toggle} onToggleAll={toggleAll} />
       </div>
       <BulkAllocateModal open={modalOpen} onClose={() => setModalOpen(false)}
-        count={selected.size} baskets={baskets} onSubmit={submit} />
+        selectedPositions={selectedPositions} baskets={baskets} onSubmit={submit} />
     </Card>
   )
 }

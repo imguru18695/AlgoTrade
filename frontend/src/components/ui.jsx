@@ -56,15 +56,16 @@ export const NumberField = ({ label, hint, value, onChange, placeholder, disable
   </label>
 )
 
-export const Button = ({ children, onClick, variant = 'ghost', type = 'button', style }) => {
+export const Button = ({ children, onClick, variant = 'ghost', type = 'button', disabled, style }) => {
   const variants = {
     primary: { background: 'var(--teal)', color: '#04231f', border: '1px solid var(--teal)' },
     ghost:   { background: 'transparent', color: 'var(--text-2)', border: '1px solid var(--line-2)' },
     danger:  { background: 'transparent', color: 'var(--down)', border: '1px solid var(--line-2)' },
   }
   return (
-    <button type={type} onClick={onClick}
-      style={{ ...variants[variant], borderRadius: 7, padding: '8px 15px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', ...style }}>
+    <button type={type} onClick={onClick} disabled={disabled}
+      style={{ ...variants[variant], borderRadius: 7, padding: '8px 15px', fontSize: 13.5, fontWeight: 600,
+        cursor: disabled ? 'default' : 'pointer', opacity: disabled ? .55 : 1, ...style }}>
       {children}
     </button>
   )

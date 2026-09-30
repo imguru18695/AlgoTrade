@@ -1,25 +1,51 @@
 import { useState } from 'react'
 import { Button } from './ui.jsx'
+import { underlyingOf, detectUnderlying } from '../util.js'
 
-export default function BulkAllocateModal({ open, onClose, count, baskets, onSubmit }) {
+export default function BulkAllocateModal({ open, onClose, selectedPositions, baskets, onSubmit }) {
   const [tab, setTab] = useState('existing')
   const [basketId, setBasketId] = useState(baskets[0]?.id ?? '')
   const [basketName, setBasketName] = useState('')
   const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
 
   if (!open) return null
+  const count = selectedPositions.length
 
-  const submit = () => {
+  const flash = message => {
+    setError(message)
+    setTimeout(() => setError(null), 4000)
+  }
+
+  const submit = async () => {
+    // Client-side pre-check for instant feedback — the backend enforces the
+    // same rule authoritatively (assign_position raises MixedUnderlyingError),
+    // this just avoids a round-trip for the common case.
+    const selectedUnderlyings = new Set(selectedPositions.map(p => underlyingOf(p.tradingsymbol)).filter(Boolean))
+    if (selectedUnderlyings.size > 1) {
+      flash(`These positions span more than one underlying (${[...selectedUnderlyings].join(', ')}) — a basket can only hold one.`)
+      return
+    }
     if (tab === 'existing') {
       const target = baskets.find(b => String(b.id) === String(basketId))
       if (target?.rm_enabled) {
-        setError('Deactivate Risk Management on this basket before adding positions.')
-        setTimeout(() => setError(null), 4000)
+        flash('Deactivate Risk Management on this basket before adding positions.')
         return
       }
-      onSubmit({ mode: 'existing', basketId })
-    } else {
-      onSubmit({ mode: 'new', basketName })
+      const existing = detectUnderlying(target?.positions || [])
+      const adding = [...selectedUnderlyings][0]
+      if (existing && adding && existing !== adding) {
+        flash(`This basket already holds ${existing} positions — cannot add a ${adding} position to it.`)
+        return
+      }
+    }
+    setBusy(true)
+    try {
+      await onSubmit(tab === 'existing' ? { mode: 'existing', basketId } : { mode: 'new', basketName })
+    } catch (e) {
+      flash(e.message)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -55,10 +81,10 @@ export default function BulkAllocateModal({ open, onClose, count, baskets, onSub
 
         {error && <p style={{ color: 'var(--down)', fontSize: 13, marginTop: 8 }}>{error}</p>}
 
-        <Button variant="primary" onClick={submit} style={{ width: '100%', marginTop: 16 }}>
-          {tab === 'existing' ? 'Allocate' : 'Create & Allocate'}
+        <Button variant="primary" onClick={submit} disabled={busy} style={{ width: '100%', marginTop: 16 }}>
+          {busy ? 'Allocating…' : (tab === 'existing' ? 'Allocate' : 'Create & Allocate')}
         </Button>
-        <Button variant="ghost" onClick={onClose} style={{ width: '100%', marginTop: 8 }}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose} disabled={busy} style={{ width: '100%', marginTop: 8 }}>Cancel</Button>
       </div>
     </div>
   )

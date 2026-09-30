@@ -1,4 +1,18 @@
 from database import get_conn
+from instruments import underlying_of
+
+
+class MixedUnderlyingError(ValueError):
+    """Raised by assign_position() when adding a leg would introduce a second,
+    different index into a basket that already holds one. Only applies to
+    legs that match a known index prefix — a basket of equity/commodity
+    positions (no single "underlying" concept) is never subject to this."""
+    def __init__(self, existing: str, attempted: str):
+        self.existing = existing
+        self.attempted = attempted
+        super().__init__(
+            f"This basket already holds {existing} positions — cannot add a {attempted} position to it."
+        )
 
 
 # ── Baskets ──────────────────────────────────────────────────────────────────
@@ -53,8 +67,25 @@ def delete_basket(basket_id: int):
 
 # ── Position assignment ───────────────────────────────────────────────────────
 
+def get_basket_underlyings(basket_id: int) -> set[str]:
+    """Distinct indices currently assigned to a basket. Legs that don't match
+    a known index (equity/commodity) contribute nothing — they don't
+    participate in the single-underlying constraint either way."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT tradingsymbol FROM basket_positions WHERE basket_id=?", (basket_id,)
+        ).fetchall()
+    return {u for r in rows if (u := underlying_of(r["tradingsymbol"]))}
+
+
 def assign_position(basket_id: int, tradingsymbol: str, exchange: str,
                     product: str, instrument_token: int | None):
+    new_underlying = underlying_of(tradingsymbol)
+    if new_underlying:
+        conflicting = get_basket_underlyings(basket_id) - {new_underlying}
+        if conflicting:
+            raise MixedUnderlyingError(next(iter(conflicting)), new_underlying)
+
     with get_conn() as conn:
         # Remove from any existing basket first (one basket per position rule)
         conn.execute("""

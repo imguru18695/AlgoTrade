@@ -2,22 +2,11 @@ import { useEffect, useState } from 'react'
 import { Card, Toggle, NumberField, Button } from './ui.jsx'
 import RmTwoFieldCard from './RmTwoFieldCard.jsx'
 import { postForm } from '../api.js'
+import { detectUnderlying } from '../util.js'
 
 function validatePT(inr) {
   if (!inr || inr <= 0) { window.alert('Profit Target: INR Value must be a positive number.'); return false }
   return true
-}
-
-// Mirrors rm/engine.py's _detect_underlying — same prefixes, same
-// first-leg-wins rule, so what the UI shows matches what the engine acts on.
-const UNDERLYING_PREFIXES = ['BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTY', 'SENSEX']
-function detectUnderlying(positions) {
-  for (const p of positions) {
-    for (const prefix of UNDERLYING_PREFIXES) {
-      if (p.tradingsymbol?.startsWith(prefix)) return prefix
-    }
-  }
-  return null
 }
 
 function validateSpotGuard({ lower, upper }) {

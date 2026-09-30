@@ -431,6 +431,18 @@ def _pos_key(tradingsymbol, exchange, product):
     return f"{tradingsymbol}|{exchange}|{product}"
 
 
+def _basket_underlyings(bid: int) -> set[str]:
+    from instruments import underlying_of
+    result = set()
+    for key, assigned_bid in _assignments.items():
+        if assigned_bid == bid:
+            sym = key.split("|", 1)[0]
+            u = underlying_of(sym)
+            if u:
+                result.add(u)
+    return result
+
+
 def _live_pnl(p: dict) -> tuple[float, float, float]:
     ltp = _PRICES.get(p["instrument_token"], p["last_price"])
     qty  = p["quantity"]
@@ -792,6 +804,15 @@ async def assign(
     product: str = Form(...),
     instrument_token: Optional[int] = Form(default=None),
 ):
+    from instruments import underlying_of
+    new_u = underlying_of(tradingsymbol)
+    if new_u:
+        conflicting = _basket_underlyings(basket_id) - {new_u}
+        if conflicting:
+            existing = next(iter(conflicting))
+            return JSONResponse({"error": "mixed_underlying",
+                "message": f"This basket already holds {existing} positions — cannot add a {new_u} position to it."},
+                status_code=400)
     _assignments[_pos_key(tradingsymbol, exchange, product)] = basket_id
     return RedirectResponse(url="/management", status_code=302)
 
@@ -822,12 +843,21 @@ async def new_and_assign(
 @app.post("/baskets/assign-bulk")
 async def assign_bulk(request: Request):
     global _next_basket_id
+    from instruments import underlying_of
     form = await request.form()
     basket_id   = form.get("basket_id")
     basket_name = (form.get("basket_name") or "").strip()
     symbols     = form.getlist("tradingsymbol")
     exchanges   = form.getlist("exchange")
     products    = form.getlist("product")
+
+    existing = _basket_underlyings(int(basket_id)) if basket_id else set()
+    incoming = {u for sym in symbols if (u := underlying_of(sym))}
+    combined = existing | incoming
+    if len(combined) > 1:
+        return JSONResponse({"error": "mixed_underlying",
+            "message": f"These positions span more than one underlying ({', '.join(sorted(combined))}) — a basket can only hold one."},
+            status_code=400)
 
     if basket_id:
         bid = int(basket_id)

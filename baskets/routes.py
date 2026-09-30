@@ -1,7 +1,8 @@
 ﻿from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from baskets import service
+from instruments import underlying_of
 from rm.engine import reset_basket, rearm_basket
 from typing import Optional
 
@@ -135,7 +136,10 @@ async def assign(
     product: str = Form(...),
     instrument_token: int | None = Form(default=None),
 ):
-    service.assign_position(basket_id, tradingsymbol, exchange, product, instrument_token)
+    try:
+        service.assign_position(basket_id, tradingsymbol, exchange, product, instrument_token)
+    except service.MixedUnderlyingError as e:
+        return JSONResponse({"error": "mixed_underlying", "message": str(e)}, status_code=400)
     return RedirectResponse(url="/management", status_code=302)
 
 
@@ -160,7 +164,12 @@ async def new_and_assign(
     baskets = service.list_baskets()
     name = basket_name.strip() or f"Basket {len(baskets) + 1}"
     basket = service.create_basket(name)
-    service.assign_position(basket["id"], tradingsymbol, exchange, product, instrument_token)
+    try:
+        service.assign_position(basket["id"], tradingsymbol, exchange, product, instrument_token)
+    except service.MixedUnderlyingError as e:
+        # Can't actually happen for a brand-new empty basket's first leg —
+        # guarded anyway so this route can never surface a raw 500.
+        return JSONResponse({"error": "mixed_underlying", "message": str(e)}, status_code=400)
     return RedirectResponse(url="/management", status_code=302)
 
 
@@ -173,6 +182,18 @@ async def assign_bulk(request: Request):
     exchanges = form.getlist("exchange")
     products = form.getlist("product")
     tokens = form.getlist("instrument_token")
+
+    # Validate the WHOLE batch upfront, against whatever the target basket
+    # already holds — all-or-nothing, so a conflict on symbol 3 of 5 never
+    # leaves the first 2 assigned and the rest not.
+    existing = service.get_basket_underlyings(int(basket_id)) if basket_id else set()
+    incoming = {u for sym in symbols if (u := underlying_of(sym))}
+    combined = existing | incoming
+    if len(combined) > 1:
+        return JSONResponse({
+            "error": "mixed_underlying",
+            "message": f"These positions span more than one underlying ({', '.join(sorted(combined))}) — a basket can only hold one.",
+        }, status_code=400)
 
     if basket_id:
         bid = int(basket_id)

@@ -11,6 +11,8 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable
 
+from instruments import underlying_of
+
 logger = logging.getLogger(__name__)
 
 IST            = timezone(timedelta(hours=5, minutes=30))
@@ -94,21 +96,18 @@ def _past_eod_time() -> bool:
     return _now_ist() >= EOD_EXIT_TIME
 
 
-# Checked longest-prefix-first only because it reads clearer that way — none
-# of these names actually collide as string prefixes of one another.
-_UNDERLYING_PREFIXES = ("BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTY", "SENSEX")
-
-
 def _detect_underlying(positions: list[dict]) -> str | None:
     """Best-effort index a basket's option legs belong to, parsed from the
     first leg's tradingsymbol prefix. None for a basket with no positions or
     whose legs don't match a known index (equity/commodity, or an index spot
-    prices aren't fetched for yet) — spot guards simply don't apply there."""
+    prices aren't fetched for yet) — spot guards simply don't apply there.
+    Baskets are now constrained to a single underlying at assignment time
+    (baskets/service.py), so in practice every leg agrees anyway — this just
+    reads the first one rather than re-deriving a set each tick."""
     for p in positions:
-        sym = p.get("tradingsymbol", "")
-        for prefix in _UNDERLYING_PREFIXES:
-            if sym.startswith(prefix):
-                return prefix
+        u = underlying_of(p.get("tradingsymbol", ""))
+        if u:
+            return u
     return None
 
 

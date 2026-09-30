@@ -8,6 +8,23 @@ export const stateColor = s =>
     : 'var(--amber)'
 export const cr = v => (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Cr'
 export const inr = v => '₹' + n0(v)
+// Mirrors instruments.py's underlying_of — same prefixes, same
+// first-match-wins rule, so the frontend's pre-check agrees with the
+// backend's authoritative one.
+const UNDERLYING_PREFIXES = ['BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTY', 'SENSEX']
+export function underlyingOf(tradingsymbol) {
+  for (const prefix of UNDERLYING_PREFIXES) {
+    if (tradingsymbol?.startsWith(prefix)) return prefix
+  }
+  return null
+}
+export function detectUnderlying(positions) {
+  for (const p of positions) {
+    const u = underlyingOf(p.tradingsymbol)
+    if (u) return u
+  }
+  return null
+}
 export function istNow() {
   const now = new Date()
   const utc = now.getTime() + now.getTimezoneOffset() * 60000
