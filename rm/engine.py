@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable
 
-from instruments import underlying_of
+from instruments import underlying_of, exit_quantity
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +145,7 @@ async def _check_basket(
     delete_basket_fn: Callable[[int], None] | None = None,
     spot_fn: Callable[[str], float | None] | None = None,
     spot_history_fn: Callable[[str, int], float | None] | None = None,
+    get_kite_fn: Callable[[], object | None] | None = None,
 ):
     """Evaluate one basket's RM rules for a single tick. Fires exit if needed.
     Runs concurrently with other baskets — one basket's long exit does not block others.
@@ -183,19 +184,35 @@ async def _check_basket(
 
     logger.debug(f"Basket {bid}: live P&L = ₹{pnl:,.0f}")
 
-    def _spawn_fire(reason: str, is_eod: bool = False):
+    def _spawn_fire(reason: str, is_eod: bool = False, qty_pct: int = 100):
         """Spawn _fire as a background task so this basket check returns immediately,
         allowing the engine to keep evaluating other baskets without waiting for
         order placement (which can take 5-30 s for LIMIT orders).
         _fire() sets fired=True immediately on entry, so the next tick won't re-trigger.
         pnl and peak_pnl are captured from the enclosing scope at trigger time.
+
+        qty_pct < 100 sizes each leg's exit_qty down via instruments.exit_quantity
+        (outstanding lots x qty_pct%, rounded up to the next whole lot) and skips
+        delete_on_fire below — the basket still holds real open legs afterward,
+        deleting it would orphan them exactly like the bug fixed earlier this
+        session. qty_pct == 100 (every check's default, and EOD always) leaves
+        `positions` untouched, identical to today's full-exit behavior.
         """
+        if qty_pct < 100:
+            kite = get_kite_fn() if get_kite_fn else None
+            fire_positions = [
+                {**p, "exit_qty": exit_quantity(p["tradingsymbol"], p["exchange"], p["quantity"], qty_pct, kite)}
+                for p in positions
+            ]
+        else:
+            fire_positions = positions
         task = asyncio.create_task(
-            _fire(exit_fn, bid, positions, reason, basket, eod=is_eod,
+            _fire(exit_fn, bid, fire_positions, reason, basket, eod=is_eod,
                   mtm_at_trigger=pnl,
                   peak_pnl=state.get("peak_pnl"),
                   ps_floor=state.get("floor"),
-                  delete_basket_fn=delete_basket_fn)
+                  delete_basket_fn=delete_basket_fn,
+                  partial=(qty_pct < 100))
         )
         _active_fires.add(task)
         task.add_done_callback(_active_fires.discard)
@@ -221,7 +238,8 @@ async def _check_basket(
                             f"{underlying}=₹{spot:,.2f}")
                 if state["spot_range_checks"] >= needed:
                     _spawn_fire(f"Spot Range breached: {underlying} at {spot:,.2f} "
-                                f"(limits {rm['spot_lower']:,.0f}–{rm['spot_upper']:,.0f})")
+                                f"(limits {rm['spot_lower']:,.0f}–{rm['spot_upper']:,.0f})",
+                                qty_pct=rm.get("spot_guard_qty_pct") or 100)
                     return
             else:
                 if state["spot_range_checks"] > 0:
@@ -239,7 +257,8 @@ async def _check_basket(
             pct_change = abs(spot_now - spot_then) / spot_then * 100
             if pct_change >= rm["velocity_pct"]:
                 _spawn_fire(f"Spot Velocity: {underlying} moved {pct_change:.2f}% in "
-                            f"{rm['velocity_minutes']}min (limit {rm['velocity_pct']}%)")
+                            f"{rm['velocity_minutes']}min (limit {rm['velocity_pct']}%)",
+                            qty_pct=rm.get("velocity_guard_qty_pct") or 100)
                 return
 
     # ── Profit Target (takes priority over Profit Shield) ────────────
@@ -249,7 +268,7 @@ async def _check_basket(
             state["pt_checks"] += 1
             logger.info(f"Basket {bid}: PT check {state['pt_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["pt_checks"] >= needed:
-                _spawn_fire(f"Profit Target ₹{rm['pt_inr']:,.0f} hit")
+                _spawn_fire(f"Profit Target ₹{rm['pt_inr']:,.0f} hit", qty_pct=rm.get("pt_qty_pct") or 100)
                 return
         else:
             if state["pt_checks"] > 0:
@@ -263,7 +282,7 @@ async def _check_basket(
             state["lg_checks"] += 1
             logger.info(f"Basket {bid}: LG check {state['lg_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["lg_checks"] >= needed:
-                _spawn_fire(f"Loss Guard -₹{rm['lg_inr']:,.0f} breached")
+                _spawn_fire(f"Loss Guard -₹{rm['lg_inr']:,.0f} breached", qty_pct=rm.get("lg_qty_pct") or 100)
                 return
         else:
             if state["lg_checks"] > 0:
@@ -305,7 +324,8 @@ async def _check_basket(
                 logger.info(f"Basket {bid}: PS check {state['ps_checks']}/{needed}, "
                             f"P&L=₹{pnl:,.0f} floor=₹{state['floor']:,.0f}")
                 if state["ps_checks"] >= needed:
-                    _spawn_fire(f"Profit Shield floor ₹{state['floor']:,.0f} breached")
+                    _spawn_fire(f"Profit Shield floor ₹{state['floor']:,.0f} breached",
+                                qty_pct=rm.get("ps_qty_pct") or 100)
                     return
             else:
                 if state["ps_checks"] > 0:
@@ -321,7 +341,8 @@ async def _check_basket(
             state["hard_pt_checks"] += 1
             logger.info(f"Basket {bid}: Hard PT check {state['hard_pt_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["hard_pt_checks"] >= needed:
-                _spawn_fire(f"Hard Exit Target Profit ₹{rm['hard_pt_inr']:,.0f} hit")
+                _spawn_fire(f"Hard Exit Target Profit ₹{rm['hard_pt_inr']:,.0f} hit",
+                            qty_pct=rm.get("hard_pt_qty_pct") or 100)
                 return
         else:
             if state["hard_pt_checks"] > 0:
@@ -335,7 +356,8 @@ async def _check_basket(
             state["hard_lg_checks"] += 1
             logger.info(f"Basket {bid}: Hard LG check {state['hard_lg_checks']}/{needed}, P&L=₹{pnl:,.0f}")
             if state["hard_lg_checks"] >= needed:
-                _spawn_fire(f"Hard Exit Loss Guard -₹{rm['hard_lg_inr']:,.0f} breached")
+                _spawn_fire(f"Hard Exit Loss Guard -₹{rm['hard_lg_inr']:,.0f} breached",
+                            qty_pct=rm.get("hard_lg_qty_pct") or 100)
                 return
         else:
             if state["hard_lg_checks"] > 0:
@@ -351,6 +373,7 @@ async def run_engine(
     no_ltp_fn: Callable[[], None] | None = None,
     spot_fn: Callable[[str], float | None] | None = None,
     spot_history_fn: Callable[[str, int], float | None] | None = None,
+    get_kite_fn: Callable[[], object | None] | None = None,
 ):
     """
     Main engine loop. Start as an asyncio background task:
@@ -369,6 +392,10 @@ async def run_engine(
         spot_history_fn: optional (underlying: str, minutes: int) -> float | None,
                          spot from ~N minutes ago. Both unused unless a basket
                          enables Spot Range/Velocity Guard.
+        get_kite_fn:     optional () -> KiteConnect | None, used to look up lot
+                         sizes for any check firing with Qty % < 100. None is
+                         fine (demo.py, no session) - lot size just falls back
+                         to 1, so the qty% math runs on raw share quantity.
     """
     logger.info("RM engine started.")
     while True:
@@ -387,17 +414,18 @@ async def run_engine(
         # multi-second LIMIT exit does not delay RM evaluation for all other baskets.
         for b in baskets:
             task = asyncio.create_task(_check_basket_safe(
-                b, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn, spot_fn, spot_history_fn))
+                b, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn, spot_fn, spot_history_fn, get_kite_fn))
             _active_fires.add(task)
             task.add_done_callback(_active_fires.discard)
 
 
 async def _check_basket_safe(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn=None,
-                              spot_fn=None, spot_history_fn=None):
+                              spot_fn=None, spot_history_fn=None, get_kite_fn=None):
     """Wrapper that catches all exceptions so a failed basket check never silently
     kills the background task without a traceback."""
     try:
-        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn, spot_fn, spot_history_fn)
+        await _check_basket(basket, exit_fn, ltp_fn, no_ltp_fn, delete_basket_fn,
+                             spot_fn, spot_history_fn, get_kite_fn)
     except asyncio.CancelledError:
         raise
     except Exception as e:
@@ -408,7 +436,8 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
                mtm_at_trigger: float | None = None,
                peak_pnl: float | None = None,
                ps_floor: float | None = None,
-               delete_basket_fn: Callable[[int], None] | None = None):
+               delete_basket_fn: Callable[[int], None] | None = None,
+               partial: bool = False):
     parts = [f"Basket {basket_id}: FIRING EXIT — {reason}"]
     if mtm_at_trigger is not None:
         parts.append(f"MTM=₹{mtm_at_trigger:,.0f}")
@@ -481,10 +510,15 @@ async def _fire(exit_fn, basket_id, positions, reason, basket, eod: bool = False
     if exit_succeeded:
         logger.info(f"Basket {basket_id}: exit confirmed, fired=True")
         rm = basket.get("rm") or {}
-        if delete_basket_fn and rm.get("delete_on_fire", 1):
+        # A partial fire leaves real open legs behind — deleting the basket now
+        # would orphan them in basket_positions exactly like the bug fixed
+        # earlier this session, so delete_on_fire never applies to a partial.
+        if delete_basket_fn and rm.get("delete_on_fire", 1) and not partial:
             try:
                 await delete_basket_fn(basket_id)
                 _state.pop(basket_id, None)
                 logger.info(f"Basket {basket_id}: deleted after RM fire (delete_on_fire=True)")
             except Exception as e:
                 logger.error(f"Basket {basket_id}: delete after fire failed: {e}")
+        elif partial:
+            logger.info(f"Basket {basket_id}: partial exit fired — basket kept (remaining legs still need RM).")

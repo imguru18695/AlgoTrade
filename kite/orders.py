@@ -124,7 +124,14 @@ async def _exit_one(kite, position: dict, order_type: str, basket_id: int, live_
         logger.info(f"Basket {basket_id}: {sym} qty=0 in live positions — already closed or API mismatch, skipping.")
         return
 
-    qty  = abs(live_qty)
+    # A Qty % < 100 fire (rm/engine.py's _spawn_fire) annotates each leg with
+    # its sized exit_qty (already lot-rounded). Absent that key — every full
+    # exit, which is still the default — this is unchanged: the whole live
+    # quantity. Capped at live_qty regardless, so a partial target can never
+    # exceed what's actually still open (e.g. a prior partial fire already
+    # trimmed it, or it moved since the RM tick that decided to fire).
+    target_qty = position.get("exit_qty")
+    qty  = abs(live_qty) if target_qty is None else min(abs(target_qty), abs(live_qty))
     side = _exit_side(live_qty)
     logger.info(f"Basket {basket_id}: exiting {sym} | side={side} qty={qty} type={order_type}")
 

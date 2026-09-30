@@ -224,6 +224,7 @@ async def lifespan(app: FastAPI):
         no_ltp_fn=lambda: logging.warning("RM engine: no live prices available."),
         spot_fn=spot_cache.get_spot,
         spot_history_fn=spot_cache.get_spot_n_min_ago,
+        get_kite_fn=lambda: get_kite() if load_token() else None,
     )))
     yield
     # Cancel background tasks BEFORE stopping the ticker — otherwise _refresh_loop
