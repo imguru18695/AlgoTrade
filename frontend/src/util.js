@@ -47,8 +47,17 @@ export const fmtDate = iso => {
   const [, m, d] = iso.split('-')
   return `${d} ${_MONTHS[Number(m) - 1]}`
 }
-export function lastSessions(n) {
-  const out = []; const d = new Date()
+// Anchored on `anchorIso` (the backend's own spot_date/asof — always the true
+// date of ix.last5[0]'s session, computed server-side in IST) rather than the
+// viewer's local clock. A plain `new Date()` here previously meant a browser
+// whose timezone sits behind IST (any US timezone, during IST's morning)
+// would silently resolve "today" to the wrong calendar day and mislabel the
+// entire strip by that many days — the values (last5) were always right,
+// only the date chips drifted. Falls back to istNow() only when no anchor
+// is given, so this degrades gracefully rather than breaking outright.
+export function lastSessions(n, anchorIso) {
+  const out = []
+  const d = anchorIso ? (() => { const [y, m, day] = anchorIso.split('-').map(Number); return new Date(y, m - 1, day) })() : istNow()
   while (out.length < n) {
     d.setDate(d.getDate() - 1)
     if (d.getDay() !== 0 && d.getDay() !== 6) out.push(d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }))

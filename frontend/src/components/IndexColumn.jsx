@@ -4,7 +4,7 @@ import { n0, n2, upc, stateColor, lastSessions, fmtDate } from '../util.js'
 const toneColor = t => (t === 'up' ? 'var(--up)' : t === 'down' ? 'var(--down)' : 'var(--amber)')
 
 export default function IndexColumn({ ix }) {
-  const dates = lastSessions(5)
+  const dates = lastSessions(5, ix.spot_date)
   const d = ix.deriv
 
   return (
