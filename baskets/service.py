@@ -241,3 +241,24 @@ def save_rm_velocity_guard(basket_id: int, active: bool, pct: float | None, minu
                 velocity_minutes=excluded.velocity_minutes,
                 velocity_guard_qty_pct=excluded.velocity_guard_qty_pct
         """, (basket_id, int(active), pct, minutes, qty_pct or 100))
+
+
+def disable_all_rm(basket_id: int):
+    """Turns off every check (PT, LG, PS, Spot Range/Velocity Guard, both
+    Hard Exits, EOD) in one go, without touching any of their configured
+    threshold values - a plain UPDATE rather than the upsert pattern the
+    save_rm_* functions above use, since there's nothing to preserve for a
+    basket that has no basket_rm row yet (nothing was active to begin with)."""
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE basket_rm SET
+                pt_active = 0,
+                lg_active = 0,
+                ps_active = 0,
+                spot_guard_active = 0,
+                velocity_guard_active = 0,
+                hard_pt_active = 0,
+                hard_lg_active = 0,
+                eod_exit = 0
+            WHERE basket_id = ?
+        """, (basket_id,))

@@ -39,6 +39,13 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
     await refresh()
   }
 
+  const disableAllRm = async e => {
+    e.stopPropagation()
+    if (!window.confirm(`Disable all RM checks for ${b.name}? This turns off every check (PT, LG, PS, Spot Guards, Hard Exits, EOD) — the basket will no longer auto-exit on its own.`)) return
+    await postForm(`/baskets/${b.id}/rm/disable-all`, {})
+    await refresh()
+  }
+
   const unallocateSelected = async () => {
     if (!selected.size) return
     if (b.rm_enabled) {
@@ -84,6 +91,7 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
             <Tag size={12} color="var(--muted)">{b.positions.length} pos</Tag>
           </div>
         </div>
+        <Button variant="danger" disabled={!b.rm_enabled} onClick={disableAllRm}>Disable All RM</Button>
         <Button variant="ghost" onClick={e => { e.stopPropagation(); setExpanded(true) }}>Edit</Button>
         <span style={{ color: 'var(--muted)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
       </div>

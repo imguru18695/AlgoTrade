@@ -484,8 +484,9 @@ def _build_context() -> dict:
     baskets = []
     for bid, b in _baskets.items():
         rm = _rm.get(bid, _empty_rm())
-        rm_enabled = bool(rm.get("pt_active") or rm.get("lg_active") or
-                          rm.get("ps_active") or rm.get("eod_exit"))
+        rm_enabled = bool(rm.get("pt_active") or rm.get("lg_active") or rm.get("ps_active") or
+                          rm.get("eod_exit") or rm.get("spot_guard_active") or
+                          rm.get("velocity_guard_active") or rm.get("hard_pt_active") or rm.get("hard_lg_active"))
         pos = basket_positions[bid]
         pnl = sum(p["pnl"] for p in pos)
         cost = sum(abs(p["average_price"]) * abs(p["quantity"]) * p.get("multiplier", 1) for p in pos)
@@ -835,6 +836,16 @@ async def save_delete_on_fire(basket_id: int, request: Request):
     form = await request.form()
     rm = _rm.setdefault(basket_id, _empty_rm())
     rm["delete_on_fire"] = 1 if form.get("enabled") == "1" else 0
+    return RedirectResponse(url="/management", status_code=302)
+
+
+@app.post("/baskets/{basket_id}/rm/disable-all")
+async def disable_all_rm(basket_id: int):
+    rm = _rm.setdefault(basket_id, _empty_rm())
+    for key in ("pt_active", "lg_active", "ps_active", "spot_guard_active",
+                "velocity_guard_active", "hard_pt_active", "hard_lg_active", "eod_exit"):
+        rm[key] = False
+    reset_basket(basket_id)
     return RedirectResponse(url="/management", status_code=302)
 
 

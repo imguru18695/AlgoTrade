@@ -168,6 +168,13 @@ async def save_eod_exit(
     return RedirectResponse(url="/management", status_code=302)
 
 
+@router.post("/{basket_id}/rm/disable-all")
+async def disable_all_rm(basket_id: int):
+    service.disable_all_rm(basket_id)
+    reset_basket(basket_id)
+    return RedirectResponse(url="/management", status_code=302)
+
+
 @router.post("/assign")
 async def assign(
     basket_id: int = Form(...),

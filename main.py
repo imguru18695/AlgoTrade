@@ -149,8 +149,9 @@ async def _refresh_cache():
         b["pnl_pct"]    = (b["pnl"] / basket_cost * 100) if basket_cost else 0.0
         b["rm"]         = rm
         b["rm_enabled"] = bool(
-            rm.get("pt_active") or rm.get("lg_active") or
-            rm.get("ps_active") or rm.get("eod_exit")
+            rm.get("pt_active") or rm.get("lg_active") or rm.get("ps_active") or
+            rm.get("eod_exit") or rm.get("spot_guard_active") or
+            rm.get("velocity_guard_active") or rm.get("hard_pt_active") or rm.get("hard_lg_active")
         )
         state           = get_basket_state(b["id"])
         b["fired"]      = state.get("fired", False)
