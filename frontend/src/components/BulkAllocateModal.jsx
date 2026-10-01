@@ -50,7 +50,8 @@ export default function BulkAllocateModal({ open, onClose, selectedPositions, ba
   }
 
   return (
-    <div onClick={e => e.target === e.currentTarget && onClose()}
+    <div onClick={e => e.target === e.currentTarget && onClose()} role="button" tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); else if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClose() } }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
       <div style={{ background: 'var(--panel)', border: '1px solid var(--line-2)', borderRadius: 12, padding: 22, width: 340 }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>Allocate Selected</h3>

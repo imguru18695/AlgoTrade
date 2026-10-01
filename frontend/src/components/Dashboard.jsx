@@ -27,7 +27,7 @@ export default function Dashboard() {
         if (!hasLoadedRef.current) setError(e.message)
         else console.warn('dashboard refresh failed, keeping last known data:', e.message)
       })
-    load()
+    void load()
     const id = setInterval(load, REFRESH_MS)
     return () => { alive = false; clearInterval(id) }
   }, [])

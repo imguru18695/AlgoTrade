@@ -21,7 +21,7 @@ export default function Management() {
       else console.warn('management refresh failed, keeping last known data:', e.message)
     })
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => { void refresh() }, [])
 
   // Deliberately separate from the effect above: this ONLY calls /pnl (a
   // cheap in-memory recompute, no Kite API call), never /api/management
@@ -57,7 +57,7 @@ export default function Management() {
         <BasketCard key={b.id} basket={b} pnlPositions={pnl?.positions} pnlBasket={pnl?.baskets?.[String(b.id)]} refresh={refresh} />
       ))}
 
-      <Button variant="ghost" onClick={() => postForm('/baskets/create', { name: '' }).then(refresh)}>+ New Basket</Button>
+      <Button variant="ghost" onClick={() => postForm('/baskets/create', { name: '' }).then(refresh).catch(e => console.warn('create basket failed:', e.message))}>+ New Basket</Button>
     </div>
   )
 }

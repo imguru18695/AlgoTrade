@@ -46,11 +46,11 @@ export default function Logs() {
     })
     .catch(e => setError(e.message))
 
-  useEffect(() => { load({}) }, [])
+  useEffect(() => { void load({}) }, [])
 
   const search = e => {
     e.preventDefault()
-    load({ basketName, fromDate, toDate })
+    void load({ basketName, fromDate, toDate })
   }
 
   const applyPreset = ({ key, days, months }) => {
@@ -58,7 +58,7 @@ export default function Logs() {
     setActivePreset(key)
     setFromDate(from)
     setToDate(to)
-    load({ basketName, fromDate: from, toDate: to })
+    void load({ basketName, fromDate: from, toDate: to })
   }
 
   const editDate = setter => e => { setter(e.target.value); setActivePreset(null) }

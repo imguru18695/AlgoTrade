@@ -17,6 +17,15 @@ _MAX_ATTEMPTS = 5
 _LOCKOUT_MINUTES = 15
 
 
+def _log_safe(s: str) -> str:
+    """Strip characters that could forge or corrupt log lines before an
+    untrusted value (e.g. a login form's username field) is interpolated
+    into a log message. The `!r` already used at each call site escapes
+    these via Python's repr(), but stripping them here too makes the
+    mitigation explicit rather than relying on a formatting side-effect."""
+    return s.replace("\r", "").replace("\n", "")
+
+
 def verify_login(username: str, password: str) -> bool:
     """True if the credentials are correct, the account is active, and it
     isn't currently locked out from prior failed attempts."""
@@ -41,7 +50,7 @@ def verify_login(username: str, password: str) -> bool:
 
         if row["locked_until"] and datetime.fromisoformat(row["locked_until"]) > now:
             bcrypt.checkpw(password.encode(), _DUMMY_HASH)
-            logger.warning(f"Login blocked — account {username!r} is locked until {row['locked_until']}")
+            logger.warning(f"Login blocked — account {_log_safe(username)!r} is locked until {row['locked_until']}")
             return False
 
         if not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
@@ -52,7 +61,7 @@ def verify_login(username: str, password: str) -> bool:
                 (new_failed, new_locked_until, row["id"]),
             )
             if new_locked_until:
-                logger.warning(f"Account {username!r} locked until {new_locked_until} after {new_failed} failed attempts")
+                logger.warning(f"Account {_log_safe(username)!r} locked until {new_locked_until} after {new_failed} failed attempts")
             return False
 
         conn.execute(

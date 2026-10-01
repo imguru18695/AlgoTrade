@@ -15,6 +15,8 @@ const NAVIGABLE = new Set(['dashboard', 'management', 'logs'])
 function NavItem({ icon, label, active, collapsed, onClick }) {
   return (
     <div className="nav-item" title={collapsed ? label : undefined} onClick={onClick}
+      role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
       style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 12,
         padding: collapsed ? '11px 0' : '10px 12px', borderRadius: 7, cursor: onClick ? 'pointer' : 'default',
         color: active ? 'var(--text)' : 'var(--muted)', background: active ? 'var(--teal-dim)' : 'transparent',

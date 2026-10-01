@@ -58,7 +58,9 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
 
   return (
     <Card style={{ marginBottom: 12, borderColor: color !== 'var(--muted)' ? `color-mix(in srgb,${color} 35%,var(--line))` : undefined }}>
-      <div onClick={() => setExpanded(e => !e)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', cursor: 'pointer' }}>
+      <div onClick={() => setExpanded(e => !e)} role="button" tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(ex => !ex) } }}
+        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', cursor: 'pointer' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontWeight: 600, fontSize: 15.5 }}>{b.name}</span>

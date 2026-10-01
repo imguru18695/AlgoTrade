@@ -12,7 +12,7 @@ export default function App() {
 
   useEffect(() => {
     let alive = true
-    fetchSession().then(s => { if (alive) setSession(s) })
+    void fetchSession().then(s => { if (alive) setSession(s) })
     return () => { alive = false }
   }, [])
 
