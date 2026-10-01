@@ -3,17 +3,17 @@ Strategy auto-execution engine.
 
 Ticks every 60 seconds during market hours and checks all enabled templates:
   1. Not already triggered today?
-  2. Entry time matches current HH:MM IST?
-  3. VIX within configured range?
+  2. Entry trigger is "time" (the only one currently auto-fired)?
+  3. Entry time matches current HH:MM IST?
 → Compute strikes → Place orders → Auto-set RM
 
-All I/O is injected (get_chain_fn, place_orders_fn, set_rm_fn, get_vix_fn)
-so the same engine runs in demo and live with different backends.
+All I/O is injected (get_chain_fn, place_orders_fn, set_rm_fn) so the same
+engine runs in demo and live with different backends.
 """
 import asyncio
 import logging
 from datetime import date, datetime, time as dtime, timedelta, timezone
-from typing import Callable, Optional
+from typing import Callable
 
 log = logging.getLogger(__name__)
 
@@ -258,7 +258,6 @@ async def execute_template(
 
 async def run_strategy_engine(
     get_templates_fn: Callable,   # () → list[dict]
-    get_vix_fn:       Callable,   # () → float | None
     get_chain_fn:     Callable,   # (symbol, expiry) → chain dict
     place_orders_fn:  Callable,   # async (tmpl, legs) → basket_id
     set_rm_fn:        Callable,   # (basket_id, rm_dict)
@@ -280,17 +279,13 @@ async def run_strategy_engine(
                 continue
             if tmpl.get("last_triggered_date") == today_str:
                 continue  # already fired today
+            # Only the time trigger is live; vix_daily_change templates are saved but never auto-fired
+            if tmpl.get("entry_trigger", "time") != "time":
+                continue
             if tmpl.get("entry_time") != now_hhmm:
                 continue  # not entry time yet
 
-            log.info(f"Strategy scheduler: '{tmpl['name']}' (id={tmpl['id']}) — checking conditions")
-
-            # VIX gate
-            vix = get_vix_fn()
-            vix_ok = _check_vix(vix, tmpl.get("vix_min"), tmpl.get("vix_max"))
-            if not vix_ok:
-                log.info(f"  VIX {vix} outside range [{tmpl.get('vix_min')}, {tmpl.get('vix_max')}] — skip")
-                continue
+            log.info(f"Strategy scheduler: '{tmpl['name']}' (id={tmpl['id']}) — entry time reached")
 
             # Fire
             set_status_fn(tmpl["id"], "triggering", today_str, None)
@@ -301,12 +296,3 @@ async def run_strategy_engine(
                 log.error(f"  '{tmpl['name']}' failed: {e}")
                 set_status_fn(tmpl["id"], "error", today_str, None)
 
-
-def _check_vix(vix: Optional[float], vix_min: Optional[float], vix_max: Optional[float]) -> bool:
-    if vix is None:
-        return True   # can't check → allow
-    if vix_min is not None and vix < vix_min:
-        return False
-    if vix_max is not None and vix > vix_max:
-        return False
-    return True

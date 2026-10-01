@@ -58,9 +58,8 @@ def create_template(data: dict) -> dict:
         "hedge":               bool(data.get("hedge", False)),
         "hedge_offset":        _coerce(data, "hedge_offset",       int,   2),
         "strike_shift":        _coerce(data, "strike_shift",       int,   0),
-        "entry_time":          data.get("entry_time", "09:20"),   # HH:MM IST
-        "vix_min":             _coerce(data, "vix_min",            float, None),
-        "vix_max":             _coerce(data, "vix_max",            float, None),
+        "entry_trigger":       _entry_trigger(data),
+        "entry_time":          data.get("entry_time", "09:20"),   # HH:MM IST, used by the "time" trigger
         "pt_pct":              _coerce(data, "pt_pct",             float, 50.0),
         "lg_pct":              _coerce(data, "lg_pct",             float, 100.0),
         "ps_active":           bool(data.get("ps_active", False)),
@@ -93,14 +92,24 @@ def update_template(tid: int, data: dict) -> Optional[dict]:
     updatable = (
         "name", "lots", "max_lots_per_order", "atm_strikes_to_sell",
         "sell_offset", "wing_offset", "hedge", "hedge_offset", "strike_shift",
-        "entry_time", "vix_min", "vix_max",
+        "entry_time",
         "pt_pct", "lg_pct", "ps_active", "ps_trigger_pct", "ps_lock_pct",
         "eod_exit", "enabled", "strategy_type", "underlying", "expiry_rule",
     )
     for key in updatable:
         if key in data:
             t[key] = data[key]
+    if "entry_trigger" in data:
+        t["entry_trigger"] = _entry_trigger(data)
     return t
+
+
+ENTRY_TRIGGERS = ("time", "vix_daily_change")   # vix_daily_change is on hold: saved, never auto-fired
+
+
+def _entry_trigger(data: dict) -> str:
+    trigger = data.get("entry_trigger", "time")
+    return trigger if trigger in ENTRY_TRIGGERS else "time"
 
 
 def toggle_enabled(tid: int) -> Optional[dict]:

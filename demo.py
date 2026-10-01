@@ -324,7 +324,6 @@ async def lifespan(app: FastAPI):
 
     _track(asyncio.create_task(strat_engine.run_strategy_engine(
         get_templates_fn = strat_templates.list_templates,
-        get_vix_fn       = lambda: _VIX,
         get_chain_fn     = _generate_chain,
         place_orders_fn  = _demo_place_orders_fn,
         set_rm_fn        = _demo_set_rm_fn,
