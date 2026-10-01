@@ -8,6 +8,7 @@ const ICONS = {
   basket: <><path d="M4.5 9.5 H19.5 L17.8 20 H6.2 Z"/><path d="M8.5 9.5 9.3 4.5 H14.7 L15.5 9.5"/></>,
   positions: <><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></>,
   warning: <><path d="M12 3.3 21 19.8 H3 Z"/><line x1="12" y1="9.7" x2="12" y2="14.2"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></>,
+  notepad: <><path d="M6 2.5h9l3 3v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-18a1 1 0 0 1 1-1z"/><path d="M15 2.5v3h3"/><line x1="7.5" y1="10.5" x2="16.5" y2="10.5"/><line x1="7.5" y1="14" x2="16.5" y2="14"/><line x1="7.5" y1="17.5" x2="13.5" y2="17.5"/></>,
 }
 
 export function Icon({ name, size = 18 }) {

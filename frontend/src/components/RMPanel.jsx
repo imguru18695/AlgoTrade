@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card, Toggle, NumberField, PctField, Button } from './ui.jsx'
 import RmTwoFieldCard from './RmTwoFieldCard.jsx'
+import { Icon } from './icons.jsx'
 import { postForm } from '../api.js'
-import { detectUnderlying } from '../util.js'
+import { detectUnderlying, inr } from '../util.js'
 
 function validatePT(inr) {
   if (!inr || inr <= 0) { window.alert('Profit Target: INR Value must be a positive number.'); return false }
@@ -45,6 +46,33 @@ function validatePS({ trigger, lock, stepProfit, stepLock, ptInr }) {
 
 const TABS = [['spot', 'Spot based checks'], ['pnl', 'P&L Checks'], ['hard', 'Hard exits']]
 
+// Mirrors rm/engine.py's Profit Shield step-ladder exactly: once MTM reaches
+// `trigger`, the floor starts at `lock` and rises by `stepLock` for every
+// `stepProfit` of further profit. Rows sit at each step BOUNDARY (trigger +
+// i*stepProfit) — the exact point the engine's `steps = int((pnl-trigger)
+// /stepProfit)` ticks over to the next floor value — rather than some other
+// sampling, so this is a preview of the real thresholds, not an approximation.
+// Stops before Target Profit (only when it's actually enabled — a filled-in
+// but currently-disabled PT won't really exit the position, so it shouldn't
+// truncate the preview) since that would have already exited, making any
+// floor beyond it moot.
+function psLadderRows(ps, pt, maxRows = 6) {
+  const trigger = Number(ps.trigger), lock = Number(ps.lock)
+  if (!trigger || !lock || trigger <= 0 || lock <= 0) return []
+  const stepP = Number(ps.stepProfit) || 0, stepL = Number(ps.stepLock) || 0
+  const ptInr = pt.active ? Number(pt.inr) : 0
+  const cap = ptInr > trigger ? ptInr : Infinity
+  const rows = [{ mtm: trigger, floor: lock }]
+  if (stepP > 0 && stepL > 0) {
+    for (let i = 1; i < maxRows; i++) {
+      const mtm = trigger + i * stepP
+      if (mtm >= cap) break
+      rows.push({ mtm, floor: lock + i * stepL })
+    }
+  }
+  return rows
+}
+
 export default function RMPanel({ basket, refresh }) {
   const rm = basket.rm
   const [tab, setTab] = useState('spot')
@@ -58,6 +86,15 @@ export default function RMPanel({ basket, refresh }) {
   const [eod, setEod] = useState(!!rm.eod_exit)
   const [dof, setDof] = useState(!!(rm.delete_on_fire ?? 1))
   const [name, setName] = useState(basket.name)
+  const [showPsPreview, setShowPsPreview] = useState(false)
+  const psPreviewRef = useRef(null)
+
+  useEffect(() => {
+    if (!showPsPreview) return
+    const onClick = e => { if (psPreviewRef.current && !psPreviewRef.current.contains(e.target)) setShowPsPreview(false) }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [showPsPreview])
 
   // Resync each draft only when its OWN saved fields change (this card's own
   // successful save, or a fresh basket load) — an unrelated poll tick or a
@@ -252,8 +289,47 @@ export default function RMPanel({ basket, refresh }) {
           <RmTwoFieldCard title="Loss Guard" toggleLabel="Enable Loss Guard" f1Label="Max Loss (₹)" f1Placeholder="e.g. 10000"
             draft={lg} onChange={setLg} onSave={saveLG} onCancel={() => setLg({ active: rm.lg_active, inr: rm.lg_inr, ticks: rm.lg_ticks, qtyPct: rm.lg_qty_pct })} />
 
-          <Card style={{ marginBottom: 10 }}>
-            <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: 14.5 }}>Profit Shield</div>
+          <Card style={{ marginBottom: 10, overflow: 'visible' }}>
+            <div style={{ padding: '12px 15px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+              <span style={{ fontWeight: 600, fontSize: 14.5 }}>Profit Shield</span>
+              <button type="button" onClick={() => setShowPsPreview(v => !v)} title="Preview floor ladder"
+                aria-label="Preview profit shield floor ladder" aria-expanded={showPsPreview}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, display: 'flex',
+                  color: showPsPreview ? 'var(--teal)' : 'var(--muted)' }}>
+                <Icon name="notepad" size={16} />
+              </button>
+              {showPsPreview && (
+                <div ref={psPreviewRef} style={{ position: 'absolute', top: '100%', right: 15, marginTop: 6, zIndex: 20,
+                  background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 8, padding: '10px 0 6px',
+                  minWidth: 210, boxShadow: '0 8px 24px rgba(0,0,0,.35)' }}>
+                  <div style={{ padding: '0 12px 8px', fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                    Floor preview
+                  </div>
+                  {psLadderRows(ps, pt).length === 0 ? (
+                    <div style={{ padding: '0 12px 10px', fontSize: 12.5, color: 'var(--muted)', maxWidth: 190 }}>
+                      Fill in "If profit reaches" and "Lock min profit at" to preview.
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '3px 12px', fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>MTM Profit</th>
+                          <th style={{ textAlign: 'right', padding: '3px 12px', fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Min Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {psLadderRows(ps, pt).map((r, i) => (
+                          <tr key={i}>
+                            <td className="mono" style={{ padding: '3px 12px', fontSize: 13 }}>{inr(r.mtm)}</td>
+                            <td className="mono" style={{ padding: '3px 12px', fontSize: 13, textAlign: 'right', color: 'var(--up)' }}>{inr(r.floor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
             <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Toggle checked={!!ps.active} onChange={active => setPs({ ...ps, active })} label="Enable Profit Shield" />
               <div style={{ display: 'flex', gap: 10 }}>
