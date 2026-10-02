@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable
 
-from instruments import underlying_of, exit_quantity
+from instruments import detect_underlying, exit_quantity
 
 logger = logging.getLogger(__name__)
 
@@ -102,19 +102,6 @@ def _past_eod_time() -> bool:
     return _now_ist() >= EOD_EXIT_TIME
 
 
-def _detect_underlying(positions: list[dict]) -> str | None:
-    """Best-effort index a basket's option legs belong to, parsed from the
-    first leg's tradingsymbol prefix. None for a basket with no positions or
-    whose legs don't match a known index (equity/commodity, or an index spot
-    prices aren't fetched for yet) — spot guards simply don't apply there.
-    Baskets are now constrained to a single underlying at assignment time
-    (baskets/service.py), so in practice every leg agrees anyway — this just
-    reads the first one rather than re-deriving a set each tick."""
-    for p in positions:
-        u = underlying_of(p.get("tradingsymbol", ""))
-        if u:
-            return u
-    return None
 
 
 def compute_basket_pnl(
@@ -228,7 +215,7 @@ async def _check_basket(
     # only on the index spot itself, so it stays meaningful even if a
     # leg's own quote is temporarily stale.
     if rm.get("spot_guard_active") and rm.get("spot_lower") is not None and rm.get("spot_upper") is not None:
-        underlying = _detect_underlying(positions)
+        underlying = detect_underlying(positions)
         spot = spot_fn(underlying) if underlying and spot_fn else None
         if spot is not None:
             if spot <= rm["spot_lower"] or spot >= rm["spot_upper"]:
@@ -250,7 +237,7 @@ async def _check_basket(
     # range above, is the "sudden movement" case a static range can't catch.
     # No confirm-ticks here: the N-minute window is itself the time filter.
     if rm.get("velocity_guard_active") and rm.get("velocity_pct") and rm.get("velocity_minutes"):
-        underlying = _detect_underlying(positions)
+        underlying = detect_underlying(positions)
         spot_now = spot_fn(underlying) if underlying and spot_fn else None
         spot_then = spot_history_fn(underlying, rm["velocity_minutes"]) if underlying and spot_history_fn else None
         if spot_now is not None and spot_then:

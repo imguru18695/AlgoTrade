@@ -403,6 +403,28 @@ _POSITIONS = [
     _make_pos("FINNIFTY2562523000CE", "NFO", "NRML",  1, 120.00,  98.00, 123005, 40),
 ]
 
+# Seeds instruments._INSTRUMENT_CACHE directly for the 5 static positions
+# above, so baskets/analytics.py's Greeks/PCR/payoff (which resolve each
+# leg's strike/expiry/instrument_type from that cache) have something to
+# find without a real Kite session - demo has no kite.instruments() to call,
+# so compute_basket_analytics() would otherwise always return None here.
+# Reaching into another module's underscore-prefixed cache like this is only
+# OK because it's test/demo seeding, isolated to this file - lot sizes are
+# NOT seeded through this path, the "lots" field above already sets that
+# independently per-position via _make_pos's own multiplier convention.
+import instruments as _instruments
+_DEMO_EXPIRY = _get_expiries()[0]
+for _sym, _exch, _strike, _opt in [
+    ("NIFTY2562524000CE", "NFO", 24000, "CE"),
+    ("NIFTY2562524000PE", "NFO", 24000, "PE"),
+    ("BANKNIFTY2562552000CE", "NFO", 52000, "CE"),
+    ("BANKNIFTY2562552000PE", "NFO", 52000, "PE"),
+    ("FINNIFTY2562523000CE", "NFO", 23000, "CE"),
+]:
+    _instruments._INSTRUMENT_CACHE[(_exch, _sym)] = {
+        "lot_size": 1, "strike": _strike, "expiry": _DEMO_EXPIRY, "instrument_type": _opt,
+    }
+
 _baskets: dict[int, dict] = {
     1: {"id": 1, "name": "BNF Short Straddle", "order_type": "LIMIT"},
     2: {"id": 2, "name": "Nifty Hedge",         "order_type": "LIMIT"},
@@ -641,6 +663,9 @@ async def execute_strategy(request: Request):
 
 @app.get("/pnl")
 async def get_pnl():
+    from instruments import detect_underlying
+    from baskets.analytics import compute_basket_analytics
+
     ctx = _build_context()
     positions_data = {}
     total_pnl = 0.0
@@ -652,11 +677,14 @@ async def get_pnl():
     baskets_data = {}
     for b in ctx["baskets"]:
         state = get_basket_state(b["id"])
+        underlying = detect_underlying(b.get("positions", []))
+        spot = _UNDERLYINGS[underlying]["spot"] if underlying in _UNDERLYINGS else None
         baskets_data[str(b["id"])] = {
-            "pnl":      b["pnl"],
-            "pnl_pct":  b["pnl_pct"],
-            "peak_pnl": state.get("peak_pnl"),
-            "ps_floor": state.get("floor") if state.get("ps_armed") else None,
+            "pnl":       b["pnl"],
+            "pnl_pct":   b["pnl_pct"],
+            "peak_pnl":  state.get("peak_pnl"),
+            "ps_floor":  state.get("floor") if state.get("ps_armed") else None,
+            "analytics": compute_basket_analytics(b.get("positions", []), spot, kite=None),
         }
 
     return JSONResponse({"total_pnl": total_pnl, "positions": positions_data, "baskets": baskets_data})

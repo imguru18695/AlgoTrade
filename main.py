@@ -468,9 +468,16 @@ async def debug_positions(request: Request):
 
 @app.get("/pnl")
 async def get_pnl(request: Request):
-    """Lightweight P&L endpoint — recomputes from ticker/last_price without a Kite API call."""
+    """Lightweight P&L endpoint — recomputes from ticker/last_price without a Kite API call.
+    Also recomputes each basket's Greeks/PCR/payoff on this same cheap cycle (baskets/analytics.py) -
+    no new Kite calls either: spot comes from spot_cache (already polled independently) and the
+    strike/expiry lookups hit instruments.py's already-warm instrument-master cache."""
     if not _has_valid_session(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
+    from market import spot_cache
+    from instruments import detect_underlying
+    from baskets.analytics import compute_basket_analytics
+
     positions_data: dict[str, dict] = {}
     total_pnl = 0.0
 
@@ -480,23 +487,38 @@ async def get_pnl(request: Request):
         positions_data[key] = {"ltp": ltp, "pnl": pnl, "pnl_pct": pnl_pct}
         total_pnl += pnl
 
+    kite = get_kite() if load_token() else None
     baskets_data: dict[str, dict] = {}
     for b in _basket_cache:
+        basket_positions = b.get("positions", [])
         basket_pnl = sum(
             positions_data.get(_position_key(p), {}).get("pnl", 0)
-            for p in b.get("positions", [])
+            for p in basket_positions
         )
         basket_cost = sum(
             abs(p["average_price"]) * abs(p["quantity"]) * p.get("multiplier", 1)
-            for p in b.get("positions", [])
+            for p in basket_positions
         )
         basket_pnl_pct = (basket_pnl / basket_cost * 100) if basket_cost else 0.0
         state = get_basket_state(b["id"])
+
+        # Greeks need the freshest LTP for IV-solving — the cached position's
+        # own last_price is only as fresh as the last 60s _refresh_cache(),
+        # but positions_data above was just recomputed from the live ticker.
+        fresh_positions = [
+            {**p, "last_price": positions_data.get(_position_key(p), {}).get("ltp", p["last_price"])}
+            for p in basket_positions
+        ]
+        underlying = detect_underlying(fresh_positions)
+        spot = spot_cache.get_spot(underlying) if underlying else None
+        analytics = compute_basket_analytics(fresh_positions, spot, kite)
+
         baskets_data[str(b["id"])] = {
-            "pnl":      basket_pnl,
-            "pnl_pct":  basket_pnl_pct,
-            "peak_pnl": state.get("peak_pnl"),
-            "ps_floor": state.get("floor") if state.get("ps_armed") else None,
+            "pnl":       basket_pnl,
+            "pnl_pct":   basket_pnl_pct,
+            "peak_pnl":  state.get("peak_pnl"),
+            "ps_floor":  state.get("floor") if state.get("ps_armed") else None,
+            "analytics": analytics,
         }
 
     return JSONResponse({"total_pnl": total_pnl, "positions": positions_data, "baskets": baskets_data})

@@ -23,44 +23,77 @@ def underlying_of(tradingsymbol: str) -> str | None:
     return None
 
 
-# Lot sizes are per-tradingsymbol, not per-underlying-prefix: equity F&O
-# alone spans hundreds of stocks, each with its own lot size, and NSE/BSE
-# revise them periodically (most recently under SEBI's minimum-contract-value
-# framework). A hardcoded table would need constant upkeep and would silently
-# go stale, so this fetches Kite's own instrument master instead - the same
-# live source Kite itself trades against - and caches it. Mirrors the caching
+def detect_underlying(positions: list[dict]) -> str | None:
+    """Best-effort index a basket's option legs belong to, parsed from the
+    first leg's tradingsymbol prefix. None for a basket with no positions or
+    whose legs don't match a known index (equity/commodity, or an index spot
+    prices aren't fetched for yet). Baskets are constrained to a single
+    underlying at assignment time (baskets/service.py), so in practice every
+    leg agrees anyway - this just reads the first one rather than re-deriving
+    a set each call. Shared by rm/engine.py (Spot Guards) and baskets/analytics.py
+    (Greeks need to know which index's spot to price legs against)."""
+    for p in positions:
+        u = underlying_of(p.get("tradingsymbol", ""))
+        if u:
+            return u
+    return None
+
+
+# Per-tradingsymbol instrument info (lot size, strike, expiry, instrument
+# type), not a per-underlying-prefix table: equity F&O alone spans hundreds
+# of stocks each with their own lot size, and NSE/BSE revise these
+# periodically (most recently under SEBI's minimum-contract-value framework).
+# A hardcoded table would need constant upkeep and would silently go stale,
+# so this fetches Kite's own instrument master instead - the same live
+# source Kite itself trades against - and caches it. Mirrors the caching
 # convention in market/live.py's _resolve_tokens (module-level dict + TTL,
-# refreshed lazily on the next call after expiry).
-_LOT_SIZE_CACHE: dict[tuple[str, str], int] = {}
-_LOT_SIZE_CACHE_TS = 0.0
-_LOT_SIZE_CACHE_TTL = 24 * 3600
+# refreshed lazily on the next call after expiry). One cache for everything
+# Kite's dump gives us per-row, rather than a separate fetch+cache per field,
+# since they all come from the exact same kite.instruments() call.
+_INSTRUMENT_CACHE: dict[tuple[str, str], dict] = {}
+_INSTRUMENT_CACHE_TS = 0.0
+_INSTRUMENT_CACHE_TTL = 24 * 3600
 
 
-def _refresh_lot_sizes(kite) -> None:
-    global _LOT_SIZE_CACHE_TS
-    fresh: dict[tuple[str, str], int] = {}
+def _refresh_instruments(kite) -> None:
+    global _INSTRUMENT_CACHE_TS
+    fresh: dict[tuple[str, str], dict] = {}
     for exch in ("NFO", "BFO"):   # NSE and BSE F&O - covers every index AND equity derivative
         try:
             dump = kite.instruments(exch)
         except Exception:
             continue
         for row in dump:
-            fresh[(row["exchange"], row["tradingsymbol"])] = row["lot_size"]
+            fresh[(row["exchange"], row["tradingsymbol"])] = {
+                "lot_size":        row["lot_size"],
+                "strike":          row.get("strike") or None,
+                "expiry":          row.get("expiry"),
+                "instrument_type": row.get("instrument_type"),   # "CE" / "PE" / "FUT"
+            }
     if fresh:
-        _LOT_SIZE_CACHE.clear()
-        _LOT_SIZE_CACHE.update(fresh)
-        _LOT_SIZE_CACHE_TS = time.time()
+        _INSTRUMENT_CACHE.clear()
+        _INSTRUMENT_CACHE.update(fresh)
+        _INSTRUMENT_CACHE_TS = time.time()
+
+
+def instrument_info(tradingsymbol: str, exchange: str, kite=None) -> dict | None:
+    """Raw {lot_size, strike, expiry, instrument_type} from Kite's live
+    instrument master, refreshed at most once a day. None when the symbol
+    isn't found there (cash equities) or no kite session is available yet -
+    callers should treat that as "not an option we can price", not guess."""
+    if kite is not None and (not _INSTRUMENT_CACHE or time.time() - _INSTRUMENT_CACHE_TS >= _INSTRUMENT_CACHE_TTL):
+        _refresh_instruments(kite)
+    return _INSTRUMENT_CACHE.get((exchange, tradingsymbol))
 
 
 def _lot_size_of(tradingsymbol: str, exchange: str, kite=None) -> int:
-    """Raw lot size from Kite's live instrument master, refreshed at most
-    once a day. Returns 1 (not None) when the symbol isn't found there (cash
-    equities - NSE/BSE list those at lot_size=1 - or no kite session yet) so
-    every lot-based formula downstream degrades cleanly to operating on raw
-    quantity instead of needing its own fallback."""
-    if kite is not None and (not _LOT_SIZE_CACHE or time.time() - _LOT_SIZE_CACHE_TS >= _LOT_SIZE_CACHE_TTL):
-        _refresh_lot_sizes(kite)
-    return _LOT_SIZE_CACHE.get((exchange, tradingsymbol)) or 1
+    """Raw lot size from Kite's live instrument master. Returns 1 (not None)
+    when the symbol isn't found there (cash equities - NSE/BSE list those at
+    lot_size=1 - or no kite session yet) so every lot-based formula
+    downstream degrades cleanly to operating on raw quantity instead of
+    needing its own fallback."""
+    info = instrument_info(tradingsymbol, exchange, kite)
+    return info["lot_size"] if info else 1
 
 
 def lots_of(tradingsymbol: str, exchange: str, quantity: int, kite=None) -> int | None:

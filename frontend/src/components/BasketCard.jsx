@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Card, Tag, Button } from './ui.jsx'
 import PositionsTable from './PositionsTable.jsx'
+import PositionSummary from './PositionSummary.jsx'
 import RMPanel from './RMPanel.jsx'
 import { postForm } from '../api.js'
 import { inr, upc } from '../util.js'
@@ -97,27 +98,30 @@ export default function BasketCard({ basket: b, pnlPositions, pnlBasket, refresh
       </div>
 
       {expanded && (
-        <div style={{ borderTop: '1px solid var(--line)', padding: 18, display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 20 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 15 }}>Positions</h3>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', border: '1px solid var(--line-2)', borderRadius: 7, overflow: 'hidden' }}>
-                  {['LIMIT', 'MARKET'].map(ot => (
-                    <button key={ot} onClick={() => setOrderType(ot)}
-                      style={{ padding: '7px 13px', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
-                        background: b.order_type === ot ? 'var(--teal-dim)' : 'transparent',
-                        color: b.order_type === ot ? 'var(--teal)' : 'var(--muted)' }}>{ot === 'LIMIT' ? 'Limit' : 'Market'}</button>
-                  ))}
+        <div style={{ borderTop: '1px solid var(--line)', padding: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 20, marginBottom: 24 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 15 }}>Positions</h3>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', border: '1px solid var(--line-2)', borderRadius: 7, overflow: 'hidden' }}>
+                    {['LIMIT', 'MARKET'].map(ot => (
+                      <button key={ot} onClick={() => setOrderType(ot)}
+                        style={{ padding: '7px 13px', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
+                          background: b.order_type === ot ? 'var(--teal-dim)' : 'transparent',
+                          color: b.order_type === ot ? 'var(--teal)' : 'var(--muted)' }}>{ot === 'LIMIT' ? 'Limit' : 'Market'}</button>
+                    ))}
+                  </div>
+                  {selected.size > 0 && (
+                    <Button variant="danger" onClick={unallocateSelected}>Unallocate Selected ({selected.size})</Button>
+                  )}
                 </div>
-                {selected.size > 0 && (
-                  <Button variant="danger" onClick={unallocateSelected}>Unallocate Selected ({selected.size})</Button>
-                )}
               </div>
+              {unallocError && <p style={{ color: 'var(--down)', fontSize: 13, marginBottom: 8 }}>{unallocError}</p>}
+              <PositionsTable positions={b.positions} pnlPositions={pnlPositions} showProduct={false}
+                selected={selected} onToggle={toggle} onToggleAll={toggleAll} />
             </div>
-            {unallocError && <p style={{ color: 'var(--down)', fontSize: 13, marginBottom: 8 }}>{unallocError}</p>}
-            <PositionsTable positions={b.positions} pnlPositions={pnlPositions} showProduct={false}
-              selected={selected} onToggle={toggle} onToggleAll={toggleAll} />
+            <PositionSummary analytics={pnlBasket?.analytics} />
           </div>
           <RMPanel basket={b} refresh={refresh} />
         </div>
